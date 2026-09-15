@@ -77,7 +77,7 @@ func _build_overlay() -> void:
 	title = _label(box, "Every hunt starts\nwith a first step.", 44, INK)
 	description = _label(box, "Explore the proving ground. Find the three amber markers.\nLearn to move and turn before drawing your blade.", 17, MUTED)
 	_label(box, "W A S D   Move       MOUSE   Turn\nESC   Pause       R   Reset       F1   Diagnostics", 15, INK)
-	start_button = _button("Enter the field   →", func(): continue_requested.emit())
+	start_button = _button("Enter the field", func(): continue_requested.emit())
 	start_button.custom_minimum_size = Vector2(0, 54)
 	box.add_child(start_button)
 	var reset_button := _button("Restart exercise", func(): reset_requested.emit())
@@ -88,7 +88,7 @@ func show_menu(first_time: bool) -> void:
 	overlay.show()
 	title.text = "Every hunt starts\nwith a first step." if first_time else "Take a breath."
 	description.text = "Explore the proving ground. Find the three amber markers.\nLearn to move and turn before drawing your blade." if first_time else "The field is paused. Resume when you are ready.\nYour position and exercise progress are preserved."
-	start_button.text = "Enter the field   →" if first_time else "Return to the field   →"
+	start_button.text = "Enter the field" if first_time else "Return to the field"
 	start_button.grab_focus()
 
 func hide_menu() -> void:

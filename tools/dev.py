@@ -22,6 +22,7 @@ def engine():
 
 def run(*arguments):
     (ROOT / "build").mkdir(exist_ok=True)
+    (ROOT / "build/.gdignore").touch()
     result = subprocess.run([engine(), "--headless", "--path", str(ROOT), "--log-file", str(ROOT / "build/godot.log"), *arguments], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     print(result.stdout, end="", flush=True)
     # Import may return 0 even when GDScript compilation failed.
