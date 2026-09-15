@@ -61,6 +61,7 @@ def main():
         run("--script", "res://tests/input_test.gd")
         run("--script", "res://tests/movement_test.gd")
         run("--script", "res://tests/combat_test.gd")
+        run("--script", "res://tests/vitality_test.gd")
     if args.command in ("web", "all", "preview"):
         export("web")
     if args.command in ("windows", "all"):

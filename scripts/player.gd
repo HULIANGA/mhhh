@@ -2,6 +2,9 @@ class_name Hunter
 extends CharacterBody3D
 
 signal stamina_changed(current: float, maximum: float)
+signal health_changed(current: int, maximum: int)
+signal hit_received(damage: int, world_position: Vector3)
+signal defeated
 signal action_changed(action: String, phase: String)
 signal attack_landed(damage: int, target_name: String, world_position: Vector3)
 signal action_denied(reason: String)
@@ -12,6 +15,7 @@ const STATE_CHARGING: StringName = &"charging"
 const STATE_CHARGE_CANCEL: StringName = &"charge_cancel"
 const STATE_CHARGE_RELEASE: StringName = &"charge_release"
 const STATE_DODGING: StringName = &"dodging"
+const STATE_DEFEATED: StringName = &"defeated"
 const LIGHT_ACTION: CombatActionData = preload("res://data/light_1.tres")
 const CHARGE_ACTIONS: Array[CombatActionData] = [
 	preload("res://data/charge_1.tres"),
@@ -34,6 +38,7 @@ const BLADE_TOP_LEFT_TILT := deg_to_rad(-10.0)
 @export var acceleration: float = 32.0
 @export var turn_speed: float = 16.0
 @export var dodge_speed: float = 11.0
+@export_range(1, 999) var max_health: int = 100
 @export var max_stamina: float = 100.0
 @export var stamina_regeneration: float = 24.0
 @export var stamina_regeneration_delay: float = 0.7
@@ -41,12 +46,14 @@ const BLADE_TOP_LEFT_TILT := deg_to_rad(-10.0)
 
 var travel_distance: float = 0.0
 var input_frame := HunterInputFrame.new()
+var health: int = 100
 var stamina: float = 100.0
 var action_state: StringName = STATE_FREE
 var action_phase: StringName = &"ready"
 var combo_step: int = 0
 var charge_tier: int = 0
 var is_invulnerable: bool = false
+var is_defeated: bool = false
 var last_attack_damage: int = 0
 var _action_data: CombatActionData
 var _action_elapsed: float = 0.0
@@ -61,6 +68,7 @@ var _attack_repeat_blocked: bool = false
 var _queued_charge: bool = false
 var _attack_token: int = 0
 var _hit_targets: Dictionary = {}
+var _resolved_incoming_attacks: Dictionary = {}
 var _dodge_direction := Vector3.ZERO
 var _stamina_delay_left: float = 0.0
 var _walk_time: float = 0.0
@@ -72,12 +80,17 @@ var _sword_rest_position := Vector3(0.48, 0.92, -0.26)
 @onready var input_source: HunterInputSource = $InputSource
 
 func _ready() -> void:
+	health = max_health
 	stamina = max_stamina
 	_build_placeholder()
+	health_changed.emit(health, max_health)
 	stamina_changed.emit(stamina, max_stamina)
 	action_changed.emit("Ready", "Aim, then choose an action")
 
 func _physics_process(delta: float) -> void:
+	if is_defeated:
+		velocity = Vector3.ZERO
+		return
 	input_frame = input_source.sample(get_viewport(), global_position)
 	_update_attack_hold(delta)
 	_regenerate_stamina(delta)
@@ -328,6 +341,35 @@ func _resolve_attack_hit() -> void:
 			if target.receive_hit(_attack_token, _action_data.damage, hit_position):
 				attack_landed.emit(_action_data.damage, target.name, hit_position)
 
+func receive_hit(attack_token: int, damage: int, hit_position: Vector3) -> bool:
+	if damage <= 0 or _resolved_incoming_attacks.has(attack_token):
+		return false
+	# Record an attack even when dodged. The same active attack must not deal a
+	# delayed hit after its overlap began during the invulnerability window.
+	_resolved_incoming_attacks[attack_token] = true
+	if is_invulnerable or is_defeated:
+		return false
+	var applied_damage := mini(damage, health)
+	health = maxi(health - damage, 0)
+	health_changed.emit(health, max_health)
+	hit_received.emit(applied_damage, hit_position)
+	if health <= 0:
+		_enter_defeated_state()
+	return true
+
+func _enter_defeated_state() -> void:
+	if is_defeated:
+		return
+	clear_input()
+	_finish_action()
+	is_defeated = true
+	action_state = STATE_DEFEATED
+	action_phase = &"down"
+	velocity = Vector3.ZERO
+	visuals.rotation.z = deg_to_rad(-72.0)
+	action_changed.emit("Hunter down", "Press R to reset")
+	defeated.emit()
+
 func _spend_stamina(amount: float, failure_message: String) -> bool:
 	if stamina + 0.001 < amount:
 		action_denied.emit(failure_message)
@@ -382,14 +424,18 @@ func prepare_for_pause() -> void:
 func reset() -> void:
 	clear_input()
 	_attack_repeat_blocked = false
+	is_defeated = false
 	position = Vector3(0.0, 0.05, 5.0)
 	velocity = Vector3.ZERO
 	travel_distance = 0.0
 	visuals.rotation = Vector3.ZERO
 	visuals.position = Vector3.ZERO
+	health = max_health
 	stamina = max_stamina
+	_resolved_incoming_attacks.clear()
 	_stamina_delay_left = 0.0
 	_finish_action()
+	health_changed.emit(health, max_health)
 	stamina_changed.emit(stamina, max_stamina)
 
 func _animate_walk(delta: float) -> void:

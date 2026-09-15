@@ -15,6 +15,8 @@ var start_button: Button
 var objective: Label
 var target_health: Label
 var action_label: Label
+var player_health_bar: ProgressBar
+var player_health_value: Label
 var stamina_bar: ProgressBar
 var stamina_value: Label
 var feedback: Label
@@ -33,7 +35,7 @@ func _ready() -> void:
 	top.add_child(heading)
 	_label(heading, "M H H H   /   F I E L D N O T E S", 14, ACCENT)
 	_label(heading, "The proving ground", 30, INK)
-	_label(heading, "02   /   BLADE STUDY", 13, MUTED)
+	_label(heading, "03   /   SURVIVAL STUDY", 13, MUTED)
 	var pause_button := _button("Pause  /  Esc", func(): pause_requested.emit())
 	_root.add_child(pause_button)
 	pause_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
@@ -46,7 +48,7 @@ func _ready() -> void:
 	_root.add_child(bottom)
 	bottom.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
 	bottom.offset_left = 28
-	bottom.offset_top = -198
+	bottom.offset_top = -226
 	bottom.offset_right = 590
 	bottom.offset_bottom = -28
 	var content := VBoxContainer.new()
@@ -55,6 +57,18 @@ func _ready() -> void:
 	target_health = _label(content, "TRAINING POST    /    240 HP", 12, ACCENT)
 	objective = _label(content, "Learn the rhythm: commit, connect, recover.", 19, INK)
 	action_label = _label(content, "READY    /    AIM, THEN CHOOSE AN ACTION", 12, MUTED)
+	var health_row := HBoxContainer.new()
+	health_row.add_theme_constant_override("separation", 12)
+	content.add_child(health_row)
+	player_health_bar = ProgressBar.new()
+	player_health_bar.custom_minimum_size = Vector2(380, 18)
+	player_health_bar.show_percentage = false
+	player_health_bar.max_value = 100
+	player_health_bar.value = 100
+	player_health_bar.add_theme_stylebox_override("background", _panel(Color("2d2020")))
+	player_health_bar.add_theme_stylebox_override("fill", _panel(Color("bd675b")))
+	health_row.add_child(player_health_bar)
+	player_health_value = _label(health_row, "HP  100 / 100", 12, INK)
 	var stamina_row := HBoxContainer.new()
 	stamina_row.add_theme_constant_override("separation", 12)
 	content.add_child(stamina_row)
@@ -120,7 +134,7 @@ func _build_overlay() -> void:
 	box.add_child(start_button)
 	var reset_button := _button("Restart exercise", func(): reset_requested.emit())
 	box.add_child(reset_button)
-	_label(box, "PROTOTYPE  M2    /    Combat training target", 12, MUTED)
+	_label(box, "PROTOTYPE  M3.1    /    Hunter vitality", 12, MUTED)
 
 func show_menu(first_time: bool) -> void:
 	overlay.show()
@@ -138,6 +152,11 @@ func set_stamina(current: float, maximum: float) -> void:
 	stamina_bar.value = current
 	stamina_value.text = "%d / %d" % [roundi(current), roundi(maximum)]
 
+func set_player_health(current: int, maximum: int) -> void:
+	player_health_bar.max_value = maximum
+	player_health_bar.value = current
+	player_health_value.text = "HP  %d / %d" % [current, maximum]
+
 func set_target_health(current: int, maximum: int) -> void:
 	target_health.text = "TRAINING POST    /    %d OF %d HP" % [current, maximum]
 	objective.text = "Post broken. Press R to rebuild it." if current <= 0 else "Learn the rhythm: commit, connect, recover."
@@ -147,6 +166,9 @@ func set_action(action: String, phase: String) -> void:
 
 func show_hit(damage: int) -> void:
 	_show_feedback("HIT  /  %d" % damage, ACCENT)
+
+func show_player_hit(damage: int) -> void:
+	_show_feedback("HURT  /  -%d HP" % damage, DANGER)
 
 func show_denied(reason: String) -> void:
 	_show_feedback(reason.to_upper(), DANGER)

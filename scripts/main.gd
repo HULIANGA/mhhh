@@ -25,11 +25,14 @@ func _ready() -> void:
 	hud.continue_requested.connect(resume)
 	hud.pause_requested.connect(pause)
 	hud.reset_requested.connect(reset_exercise)
+	player.health_changed.connect(hud.set_player_health)
+	player.hit_received.connect(_on_player_hit)
 	player.stamina_changed.connect(hud.set_stamina)
 	player.action_changed.connect(hud.set_action)
 	player.attack_landed.connect(_on_attack_landed)
 	player.action_denied.connect(hud.show_denied)
 	training_dummy.health_changed.connect(hud.set_target_health)
+	hud.set_player_health(player.health, player.max_health)
 	hud.set_stamina(player.stamina, player.max_stamina)
 	hud.set_target_health(training_dummy.health, training_dummy.max_health)
 	hud.set_action("Ready", "Aim, then choose an action")
@@ -77,3 +80,6 @@ func reset_exercise() -> void:
 
 func _on_attack_landed(damage: int, _target_name: String, _world_position: Vector3) -> void:
 	hud.show_hit(damage)
+
+func _on_player_hit(damage: int, _world_position: Vector3) -> void:
+	hud.show_player_hit(damage)

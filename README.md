@@ -2,7 +2,7 @@
 
 个人开发的 3D 俯视角狩猎游戏。使用 **Godot 4.7.2 + GDScript**，交付 **Windows x86_64 桌面版与桌面浏览器版**；Mac 上通过浏览器验证。
 
-当前阶段：**M2 大剑训练场**。在 M1 的移动、鼠标朝向、跟随镜头、暂停和重置基础上，加入训练靶、单一普攻、两档蓄力斩、翻滚、体力、动作状态机和命中反馈。多种普攻动作暂缓到后续迭代；角色与大剑仍为可替换的程序化占位外观。
+当前阶段：**M3 狩猎闭环**。M3.1 正在现有大剑训练场上加入玩家生命、受击、翻滚免伤与倒地重置，为后续怪物追击和招式接入建立基础。多种普攻动作暂缓到后续迭代；角色与大剑仍为可替换的程序化占位外观。
 
 M2 已于 2026-09-16 通过输入、移动和战斗回归及浏览器人工验收，Web 与 Windows 构建成功；Windows 实机兼容检查保留到最终跨平台验收。详情见 [M2 验收记录](docs/M2_ACCEPTANCE.md)。
 
@@ -36,7 +36,7 @@ python3 tools/dev.py preview
 
 ```sh
 python3 tools/dev.py check     # 导入资源、检查脚本
-python3 tools/dev.py test      # 使用真实场景运行输入、移动和战斗回归
+python3 tools/dev.py test      # 使用真实场景运行输入、移动、战斗和生命回归
 python3 tools/dev.py web       # build/web/index.html
 python3 tools/dev.py windows   # build/windows/MHHH.exe
 python3 tools/dev.py all       # 两个平台一起导出
@@ -60,4 +60,4 @@ python3 tools/dev.py serve     # 仅启动服务，不重新构建
 
 **调参练习**：修改 `data/` 中一次攻击的前摇、收招或伤害，重新导出 Web 后只比较这一项变化。动作越重，不代表所有时间都必须更长；优先让前摇可读、命中清楚、收招有代价。
 
-开发里程碑见 [开发计划](docs/DEVELOPMENT_PLAN.md)，当前验收见 [M2 验收](docs/M2_ACCEPTANCE.md)，上一阶段记录见 [M1 验收](docs/M1_ACCEPTANCE.md)。所有当前几何模型与图标均在项目中制作，不使用外部美术素材。
+开发里程碑见 [开发计划](docs/DEVELOPMENT_PLAN.md)，当前进度见 [M3 验收](docs/M3_ACCEPTANCE.md)，已完成阶段见 [M2 验收](docs/M2_ACCEPTANCE.md) 和 [M1 验收](docs/M1_ACCEPTANCE.md)。所有当前几何模型与图标均在项目中制作，不使用外部美术素材。
