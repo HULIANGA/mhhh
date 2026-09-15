@@ -1,6 +1,6 @@
 class_name FieldGeometry
 extends RefCounted
-## Small mesh helpers for the replaceable M1 placeholder art.
+## Small mesh helpers for replaceable prototype art.
 
 static func material(color: Color, emission: float = 0.0) -> StandardMaterial3D:
 	var result := StandardMaterial3D.new()
@@ -32,4 +32,3 @@ static func ring(parent: Node3D, radius: float, width: float, at: Vector3, mat: 
 	mesh.rings = 40
 	mesh.ring_segments = 6
 	return instance(parent, mesh, at, mat)
-

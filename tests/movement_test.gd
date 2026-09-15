@@ -39,19 +39,10 @@ func _run() -> void:
 	game.resume()
 	await _frames(20)
 	_expect(hunter.position.distance_to(paused_position) < 0.6, "Resume does not retain a stuck movement key")
-	game.reset_exercise()
-	hunter.position = game.arena.WAYPOINTS[1] + Vector3(0, 0.05, 0)
-	await _frames(3)
-	_expect(game.visited == 0, "Waypoints must be visited in order")
-	for waypoint: Vector3 in game.arena.WAYPOINTS:
-		hunter.position = waypoint + Vector3(0, 0.05, 0)
-		hunter.velocity = Vector3.ZERO
-		await _frames(3)
-	_expect(game.visited == 3, "All three waypoints complete the exercise")
 	for i in range(10):
 		game.reset_exercise()
 		await _frames(2)
-		_expect(game.visited == 0 and hunter.travel_distance < 0.01, "Reset clears progress #%d" % i)
+		_expect(hunter.travel_distance < 0.01 and game.training_dummy.health == game.training_dummy.max_health, "Reset restores the combat exercise #%d" % i)
 		_expect(game.get_child_count() == 4, "Reset keeps the scene population stable #%d" % i)
 	print("MOVEMENT TESTS: %s" % ("PASS" if failures == 0 else "%d FAILURES" % failures))
 	paused = false

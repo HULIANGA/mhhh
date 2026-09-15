@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CombatActionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat_action_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Falling diagonal"
+windup = 0.18
+active = 0.1
+recovery = 0.28
+damage = 16
+hit_reach = 1.25
+hit_radius = 0.82
+movement_scale = 0.18

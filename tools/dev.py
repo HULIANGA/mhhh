@@ -3,6 +3,7 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import argparse
+import errno
 import os
 import platform
 import re
@@ -59,6 +60,7 @@ def main():
     if args.command == "test":
         run("--script", "res://tests/input_test.gd")
         run("--script", "res://tests/movement_test.gd")
+        run("--script", "res://tests/combat_test.gd")
     if args.command in ("web", "all", "preview"):
         export("web")
     if args.command in ("windows", "all"):
@@ -67,8 +69,21 @@ def main():
         directory = ROOT / "build/web"
         if not (directory / "index.html").is_file():
             raise SystemExit("No Web build. Run python3 tools/dev.py web first.")
-        server = ThreadingHTTPServer(("127.0.0.1", args.port), partial(PreviewHandler, directory=str(directory)))
-        print(f"Preview: http://127.0.0.1:{args.port}  (Ctrl+C to stop)", flush=True)
+        server = None
+        selected_port = args.port
+        for candidate in range(args.port, args.port + 10):
+            try:
+                server = ThreadingHTTPServer(("127.0.0.1", candidate), partial(PreviewHandler, directory=str(directory)))
+                selected_port = candidate
+                break
+            except OSError as error:
+                if error.errno != errno.EADDRINUSE:
+                    raise
+        if server is None:
+            raise SystemExit(f"Ports {args.port}–{args.port + 9} are already in use. Choose another with --port.")
+        if selected_port != args.port:
+            print(f"Port {args.port} is already in use; using {selected_port} instead.", flush=True)
+        print(f"Preview: http://127.0.0.1:{selected_port}  (Ctrl+C to stop)", flush=True)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CombatActionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat_action_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Rising return"
+windup = 0.2
+active = 0.16
+recovery = 0.3
+damage = 21
+hit_reach = 1.3
+hit_radius = 0.86
+movement_scale = 0.16

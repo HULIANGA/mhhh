@@ -2,9 +2,13 @@ extends Node3D
 
 const WAYPOINTS: Array[Vector3] = [Vector3(-8, 0, 0), Vector3(6, 0, -7), Vector3(8, 0, 6)]
 var beacons: Array[Node3D] = []
+var training_dummy: TrainingDummy
 
 func _ready() -> void:
 	_build_lighting()
+	training_dummy = TrainingDummy.new()
+	training_dummy.position = Vector3(0, 0, 0)
+	add_child(training_dummy)
 	var ground_material := ShaderMaterial.new()
 	ground_material.shader = preload("res://assets/ground.gdshader")
 	_solid_box("Ground", Vector3(36, 0.6, 30), Vector3(0, -0.3, 0), ground_material)
@@ -15,7 +19,8 @@ func _ready() -> void:
 	_solid_box("EastBoundary", Vector3(1, 0.85, 28), Vector3(17.5, 0.425, 0), wall_material)
 	var stone := FieldGeometry.material(Color("51605a"))
 	var trim := FieldGeometry.material(Color("81907a"))
-	var amber := FieldGeometry.material(Color("e6b76b"), 0.7)
+	# M1 route markers remain as dim landmarks around the M2 combat lane.
+	var amber := FieldGeometry.material(Color("816f50"), 0.18)
 	for i in range(9):
 		var x := -16.0 + i * 4.0
 		for z in [-13.8, 13.8]:

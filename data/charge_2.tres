@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CombatActionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat_action_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Charged cleave II"
+windup = 0.34
+active = 0.18
+recovery = 0.56
+damage = 60
+stamina_cost = 30.0
+hit_reach = 1.62
+hit_radius = 1.05
+movement_scale = 0.04
+charge_threshold = 1.35

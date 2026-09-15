@@ -2,9 +2,9 @@
 
 个人开发的 3D 俯视角狩猎游戏。使用 **Godot 4.7.2 + GDScript**，交付 **Windows x86_64 桌面版与桌面浏览器版**；Mac 上通过浏览器验证。
 
-当前阶段：**M1 移动训练场**。竞技场、角色移动、鼠标朝向、跟随镜头、三处移动检查点、暂停和重置。背上的大剑是占位外观，当前没有攻击、翻滚和怪物。
+当前阶段：**M2 大剑训练场**。在 M1 的移动、鼠标朝向、跟随镜头、暂停和重置基础上，加入训练靶、单一普攻、两档蓄力斩、翻滚、体力、动作状态机和命中反馈。多种普攻动作暂缓到后续迭代；角色与大剑仍为可替换的程序化占位外观。
 
-已完成 Web 与 Windows 导出，通过物理回归，用户已确认浏览器验收通过。Windows 实机验收仍待完成，详情见 [M1 验收记录](docs/M1_ACCEPTANCE.md)。
+M2 已通过输入、移动和战斗 headless 回归，Web 与 Windows 构建成功；浏览器手感和 Windows 实机仍待人工验收。详情见 [M2 验收记录](docs/M2_ACCEPTANCE.md)。
 
 ## 启动浏览器试玩
 
@@ -23,17 +23,20 @@ python3 tools/dev.py preview
 |---|---|
 | WASD | 屏幕方向移动 |
 | 鼠标移动 | 控制角色朝向，脚前金色箭头表示正面 |
+| 鼠标左键 | 单击执行一次普攻；持续按住约 0.28 秒后自动重复，每刀完整收刀后才进入下一刀 |
+| 鼠标右键 | 按住蓄力、松开释放；满蓄力自动释放二档攻击 |
+| 空格 | 朝移动方向翻滚；无移动输入时朝角色正面翻滚 |
 | Esc / Pause | 暂停或继续 |
-| R | 重置角色和检查点 |
+| R | 重置角色、体力和训练靶 |
 | F1 | 显示帧率、坐标和移动距离 |
 
-依次走到地面上的 01、02、03 金色标记。进入范围后标记消失，左下角更新进度；完成后仍可自由移动。
+靠近中央训练靶练习。普攻不消耗体力；开始蓄力扣 30，开始翻滚扣 24，取消蓄力不返还。攻击期间不可翻滚取消，蓄力期间可以用翻滚放弃蓄力。每次攻击对同一目标只结算一次伤害。
 
 ## 检查和导出
 
 ```sh
 python3 tools/dev.py check     # 导入资源、检查脚本
-python3 tools/dev.py test      # 使用真实场景和物理运行移动回归
+python3 tools/dev.py test      # 使用真实场景运行输入、移动和战斗回归
 python3 tools/dev.py web       # build/web/index.html
 python3 tools/dev.py windows   # build/windows/MHHH.exe
 python3 tools/dev.py all       # 两个平台一起导出
@@ -46,13 +49,15 @@ python3 tools/dev.py serve     # 仅启动服务，不重新构建
 
 打开 `.tools/Godot.app`，导入根目录的 `project.godot`。Windows 则打开 `.tools/` 中的 Godot exe。主场景为 `scenes/main.tscn`。
 
-- `scripts/player.gd`：消费统一输入，控制移动、朝向与可替换的角色占位模型。
+- `scripts/player.gd`：消费统一输入，控制移动、朝向、体力与战斗状态机。
+- `scripts/combat_action_data.gd`、`data/*.tres`：攻击和翻滚的伤害、消耗、范围与动作时长配置。
+- `scripts/training_dummy.gd`：训练靶生命、单次攻击去重与命中反馈。
 - `scripts/input/`：统一输入帧与键鼠适配器，接口说明见 [统一游戏输入](docs/INPUT.md)。
 - `scripts/follow_camera.gd`：镜头距离和跟随速度。
 - `scripts/arena.gd`：地面、实体边界和检查点。
 - `scripts/main.gd`、`scripts/hud.gd`：流程、暂停与界面。
 - `web/shell.html`：浏览器加载页；游戏本体始终由 Godot 运行。
 
-**第一个练习**：把玩家的 `move_speed` 从 `5.2` 改为 `4.2`，重新导出 Web 后试玩，比较移动节奏；再尝试调整镜头 `size`。每次只改一个变量。
+**调参练习**：修改 `data/` 中一次攻击的前摇、收招或伤害，重新导出 Web 后只比较这一项变化。动作越重，不代表所有时间都必须更长；优先让前摇可读、命中清楚、收招有代价。
 
-开发里程碑见 [开发计划](docs/DEVELOPMENT_PLAN.md)，验收与限制见 [M1 验收](docs/M1_ACCEPTANCE.md)。所有当前几何模型与图标均在项目中制作，不使用外部美术素材。
+开发里程碑见 [开发计划](docs/DEVELOPMENT_PLAN.md)，当前验收见 [M2 验收](docs/M2_ACCEPTANCE.md)，上一阶段记录见 [M1 验收](docs/M1_ACCEPTANCE.md)。所有当前几何模型与图标均在项目中制作，不使用外部美术素材。

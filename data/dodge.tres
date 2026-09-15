@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="CombatActionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/combat_action_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Dodge roll"
+windup = 0.0
+active = 0.24
+recovery = 0.2
+damage = 0
+stamina_cost = 24.0
+movement_scale = 0.0
