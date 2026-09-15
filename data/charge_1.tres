@@ -13,3 +13,4 @@ stamina_cost = 30.0
 hit_reach = 1.5
 hit_radius = 0.96
 movement_scale = 0.08
+charge_threshold = 0.45

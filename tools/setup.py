@@ -93,7 +93,10 @@ def main():
         checksums = curl(f"{BASE}/SHA512-SUMS.txt").decode()
         expected = next(line.split()[0] for line in checksums.splitlines() if line.rstrip().endswith(name))
         with archive.open("rb") as source:
-            if hashlib.file_digest(source, "sha512").hexdigest() != expected:
+            digest = hashlib.sha512()
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+            if digest.hexdigest() != expected:
                 raise RuntimeError(f"SHA-512 mismatch: delete {archive} and retry")
         with zipfile.ZipFile(archive) as source:
             source.extractall(LOCAL)

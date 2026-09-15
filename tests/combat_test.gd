@@ -32,12 +32,76 @@ func _run() -> void:
 	var sword_pivot: Node3D = hunter.visuals.get_node("SwordGripPivot")
 	var grip_origin := sword_pivot.position
 	_expect(sword_pivot.get_node("SwordModel/Grip").position.is_zero_approx(), "Sword pivot is centered on the grip")
+	var ready_blade_axis := sword_pivot.basis.y.normalized()
+	_expect(ready_blade_axis.z < -0.9 and ready_blade_axis.y > 0.3, "Sword tip points forward and slightly upward while ready")
+	_expect(sword_pivot.basis.x.normalized().dot(Vector3.DOWN) > 0.85 and sword_pivot.basis.x.normalized().x < -0.1, "Sword blade's upper direction leans slightly right while ready")
+	var rear_charge_basis := Basis(hunter._fore_aft_pose(Hunter.POSE_CHARGE_BACK))
+	var rear_blade_axis := Hunter.POSE_CHARGE_BACK.normalized()
+	var rear_base_edge := rear_blade_axis.cross(Vector3.RIGHT).normalized()
+	var expected_right_edge := (rear_base_edge * cos(Hunter.BLADE_TOP_RIGHT_TILT) - Vector3.RIGHT * sin(Hunter.BLADE_TOP_RIGHT_TILT)).normalized()
+	_expect(rear_charge_basis.x.normalized().dot(expected_right_edge) > 0.999, "Fore-aft pose accepts the ready-state right tilt")
+	var full_charge_basis := Basis(hunter._charge_pose_at(Hunter.CHARGE_ACTIONS[1].charge_threshold))
+	var expected_left_edge := (rear_base_edge * cos(Hunter.BLADE_TOP_LEFT_TILT) - Vector3.RIGHT * sin(Hunter.BLADE_TOP_LEFT_TILT)).normalized()
+	_expect(full_charge_basis.x.normalized().dot(expected_left_edge) > 0.999, "Raising the charged sword finishes with its upper direction tilted left")
+	var strike_start_basis := Basis(hunter._charged_strike_pose(0.0))
+	var strike_finish_basis := Basis(hunter._charged_strike_pose(1.0))
+	var finish_blade_axis := Hunter.POSE_STRAIGHT_DOWN.normalized()
+	var finish_base_edge := finish_blade_axis.cross(Vector3.RIGHT).normalized()
+	var expected_finish_edge := (finish_base_edge * cos(Hunter.BLADE_TOP_RIGHT_TILT) - Vector3.RIGHT * sin(Hunter.BLADE_TOP_RIGHT_TILT)).normalized()
+	_expect(strike_start_basis.x.normalized().dot(expected_left_edge) > 0.999 and strike_finish_basis.x.normalized().dot(expected_finish_edge) > 0.999, "Charged cleave rolls smoothly from a left tilt back to a right tilt")
+	var rear_z := Hunter.POSE_CHARGE_BACK.normalized().z
+	var leaving_rear_z := hunter._charged_strike_direction(Hunter.CHARGE_STRIKE_APEX * 0.5).z
+	var apex_z := hunter._charged_strike_direction(Hunter.CHARGE_STRIKE_APEX).z
+	var forward_z := hunter._charged_strike_direction(0.65).z
+	var finish_z := hunter._charged_strike_direction(1.0).z
+	_expect(leaving_rear_z < rear_z and absf(apex_z) < 0.001 and forward_z < 0.0 and finish_z < -0.7, "Charged cleave travels from the rear over the head and finishes forward")
 	await _tap("attack")
-	await _frames(10)
+	var minimum_light_edge_alignment := 1.0
+	for frame_index in range(10):
+		await physics_frame
+		var blade_axis := sword_pivot.basis.y.normalized()
+		var edge_hint := Vector3.DOWN * cos(Hunter.BLADE_TOP_RIGHT_TILT) - Vector3.RIGHT * sin(Hunter.BLADE_TOP_RIGHT_TILT)
+		var expected_edge := (edge_hint - blade_axis * edge_hint.dot(blade_axis)).normalized()
+		minimum_light_edge_alignment = minf(minimum_light_edge_alignment, sword_pivot.basis.x.normalized().dot(expected_edge))
+	_expect(minimum_light_edge_alignment > 0.999, "Light attack keeps a stable cutting-edge orientation without axial rotation")
 	_expect(sword_pivot.position.is_equal_approx(grip_origin), "Attack rotates the sword without moving its grip pivot")
 	await _frames(35)
 	_expect(target.hit_count == 1 and target.damage_received == 16, "One attack deals damage once across every active frame")
 	_expect(hunter.action_state == Hunter.STATE_FREE, "Light attack returns to ready after recovery")
+
+	game.reset_exercise()
+	await _position_for_combat()
+	await _tap("attack")
+	await _frames(10)
+	source.frame.charge.pressed = true
+	source.frame.charge.held = true
+	await _frames(1)
+	_expect(hunter.action_state == Hunter.STATE_LIGHT, "Buffered charge does not interrupt the current attack")
+	source.frame.charge.pressed = false
+	var saw_buffered_charge := false
+	for frame_index in range(60):
+		await physics_frame
+		saw_buffered_charge = saw_buffered_charge or hunter.action_state == Hunter.STATE_CHARGING
+	_expect(saw_buffered_charge and target.hit_count == 1, "Held charge input starts only after the preceding attack fully completes")
+	source.frame = HunterInputFrame.new()
+	source.frame.charge.released = true
+	await _frames(1)
+	source.frame = HunterInputFrame.new()
+	await _frames(20)
+
+	game.reset_exercise()
+	await _position_for_combat()
+	await _tap("attack")
+	await _frames(10)
+	source.frame.charge.pressed = true
+	source.frame.charge.held = true
+	await _frames(1)
+	source.frame = HunterInputFrame.new()
+	source.frame.charge.released = true
+	await _frames(1)
+	source.frame = HunterInputFrame.new()
+	await _frames(50)
+	_expect(hunter.action_state == Hunter.STATE_FREE, "Releasing charge before the preceding action completes cancels the buffered input")
 
 	game.reset_exercise()
 	await _position_for_combat()
@@ -113,9 +177,10 @@ func _run() -> void:
 
 	game.reset_exercise()
 	await _position_for_combat()
-	hunter.stamina = 0.0
+	hunter.stamina = 23.0
 	await _tap("dodge")
 	_expect(hunter.action_state == Hunter.STATE_FREE, "Insufficient stamina blocks dodge startup")
+	hunter.stamina = 29.0
 	await _tap("charge")
 	_expect(hunter.action_state == Hunter.STATE_FREE, "Insufficient stamina blocks charge startup")
 
@@ -138,16 +203,57 @@ func _run() -> void:
 	source.frame.charge.pressed = true
 	source.frame.charge.held = true
 	await _frames(1)
-	_expect(absf(hunter.stamina - 70.0) < 0.1, "Charge spends stamina once at startup")
+	_expect(hunter.stamina < 100.0 and hunter.stamina > 99.0, "Charge begins with a small continuous stamina drain instead of spending 30 at startup")
 	source.frame = HunterInputFrame.new()
 	source.frame.charge.held = true
 	await _frames(15)
+	_expect(hunter.stamina < 96.0 and hunter.stamina > 92.0, "Holding charge drains stamina gradually over time")
+	var early_release_pose := sword_pivot.quaternion
+	var early_distance_to_ready := early_release_pose.angle_to(hunter._sword_rest_pose())
 	source.frame = HunterInputFrame.new()
 	source.frame.charge.released = true
 	await _frames(1)
+	_expect(hunter.stamina > 90.0 and hunter.stamina < 99.0, "Early release only keeps the stamina drained while charging")
+	_expect(hunter.action_state == Hunter.STATE_CHARGE_CANCEL and early_release_pose.angle_to(sword_pivot.quaternion) < 0.15, "Early release starts a continuous return from the current charge pose")
 	source.frame = HunterInputFrame.new()
+	await _frames(5)
+	_expect(sword_pivot.quaternion.angle_to(hunter._sword_rest_pose()) < early_distance_to_ready, "Cancelled charge animates progressively back toward ready")
 	await _frames(70)
-	_expect(target.hit_count == 1 and target.damage_received == 35, "Early release performs tier-I charged cleave")
+	_expect(hunter.action_state == Hunter.STATE_FREE and target.hit_count == 0, "Releasing before tier I returns to ready without attacking")
+
+	game.reset_exercise()
+	await _position_for_combat()
+	source.frame.charge.pressed = true
+	source.frame.charge.held = true
+	await _frames(1)
+	source.frame.charge.pressed = false
+	var maximum_charge_lateral := 0.0
+	for frame_index in range(35):
+		await physics_frame
+		maximum_charge_lateral = maxf(maximum_charge_lateral, absf(sword_pivot.basis.y.normalized().x))
+	_expect(hunter.charge_tier == 1, "Holding past the first threshold reaches charge tier I")
+	var pose_before_release := sword_pivot.quaternion
+	var release_blade_z := sword_pivot.basis.y.normalized().z
+	source.frame.charge.held = false
+	source.frame.charge.released = true
+	await _frames(1)
+	_expect(pose_before_release.angle_to(sword_pivot.quaternion) < 0.15, "Tier-I release animation starts continuously from the current sword pose")
+	source.frame = HunterInputFrame.new()
+	var saw_forward_strike := false
+	var maximum_tier_one_windup_z := release_blade_z
+	for frame_index in range(70):
+		await physics_frame
+		var blade_axis := sword_pivot.basis.y.normalized()
+		if hunter.action_state == Hunter.STATE_CHARGE_RELEASE and hunter.action_phase in [&"windup", &"active"]:
+			maximum_charge_lateral = maxf(maximum_charge_lateral, absf(blade_axis.x))
+		if hunter.action_state == Hunter.STATE_CHARGE_RELEASE and hunter.action_phase == &"windup":
+			maximum_tier_one_windup_z = maxf(maximum_tier_one_windup_z, blade_axis.z)
+		if hunter.action_state == Hunter.STATE_CHARGE_RELEASE and hunter.action_phase == &"active":
+			saw_forward_strike = saw_forward_strike or blade_axis.z < -0.7
+	_expect(maximum_tier_one_windup_z < 0.1, "Tier-I cleave moves directly from the released pose toward the overhead apex without visiting full charge")
+	_expect(maximum_charge_lateral < 0.001, "Charge windup and active cleave stay in the straight fore-aft plane")
+	_expect(saw_forward_strike, "Charged cleave strikes down toward the straight-ahead direction")
+	_expect(target.hit_count == 1 and target.damage_received == 35, "Releasing after tier I performs the tier-I charged cleave")
 
 	game.reset_exercise()
 	await _position_for_combat()
@@ -156,6 +262,7 @@ func _run() -> void:
 	await _frames(1)
 	source.frame.charge.pressed = false
 	await _frames(90)
+	_expect(absf(hunter.stamina - 70.0) < 0.1, "A full charge drains 30 stamina in total")
 	source.frame = HunterInputFrame.new()
 	await _frames(80)
 	_expect(target.hit_count == 1 and target.damage_received == 60, "Full charge auto-releases the tier-II cleave")
@@ -170,7 +277,7 @@ func _run() -> void:
 	await _frames(1)
 	source.frame = HunterInputFrame.new()
 	_expect(hunter.action_state == Hunter.STATE_DODGING, "Dodge cancels an unfinished charge")
-	_expect(absf(hunter.stamina - 46.0) < 0.1, "Charge cancellation does not refund either stamina cost")
+	_expect(hunter.stamina < 76.0 and hunter.stamina > 75.0, "Charge cancellation keeps the partial drain and also pays the dodge cost")
 	await _frames(60)
 	_expect(target.hit_count == 0, "Cancelled charge never creates a hit")
 
