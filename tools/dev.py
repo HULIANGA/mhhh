@@ -57,6 +57,7 @@ def main():
     if args.command not in ("serve",):
         import_project()
     if args.command == "test":
+        run("--script", "res://tests/input_test.gd")
         run("--script", "res://tests/movement_test.gd")
     if args.command in ("web", "all", "preview"):
         export("web")

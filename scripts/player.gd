@@ -6,17 +6,19 @@ extends CharacterBody3D
 @export var turn_speed: float = 16.0
 
 var travel_distance: float = 0.0
-var aim_point := Vector3.ZERO
+var input_frame := HunterInputFrame.new()
 var _walk_time: float = 0.0
 var _left_leg: MeshInstance3D
 var _right_leg: MeshInstance3D
 @onready var visuals: Node3D = $Visuals
+@onready var input_source: HunterInputSource = $InputSource
 
 func _ready() -> void:
 	_build_placeholder()
 
 func _physics_process(delta: float) -> void:
-	var axis := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	input_frame = input_source.sample(get_viewport(), global_position)
+	var axis := input_frame.movement.limit_length(1.0)
 	# The camera has no yaw: screen right is +X, screen up is -Z.
 	var desired := Vector3(axis.x, 0.0, axis.y) * move_speed
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z).move_toward(desired, acceleration * delta)
@@ -29,29 +31,23 @@ func _physics_process(delta: float) -> void:
 	var previous := position
 	move_and_slide()
 	travel_distance += Vector2(position.x - previous.x, position.z - previous.z).length()
-	_aim_at_mouse(delta)
+	_apply_aim(input_frame.aim_direction, delta)
 	_animate_walk(delta)
 	if position.y < -5.0:
 		reset()
 
-func _aim_at_mouse(delta: float) -> void:
-	var camera := get_viewport().get_camera_3d()
-	if not camera:
-		return
-	var mouse := get_viewport().get_mouse_position()
-	var origin := camera.project_ray_origin(mouse)
-	var ray := camera.project_ray_normal(mouse)
-	var intersection: Variant = Plane(Vector3.UP, 0.0).intersects_ray(origin, ray)
-	if intersection == null:
-		return
-	aim_point = intersection
-	var direction := aim_point - global_position
+func _apply_aim(direction: Vector3, delta: float) -> void:
 	direction.y = 0.0
-	if direction.length_squared() > 0.04:
+	if direction.length_squared() > 0.0001:
 		var target_angle := atan2(-direction.x, -direction.z)
 		visuals.rotation.y = lerp_angle(visuals.rotation.y, target_angle, 1.0 - exp(-turn_speed * delta))
 
+func clear_input() -> void:
+	input_source.clear()
+	input_frame = HunterInputFrame.new()
+
 func reset() -> void:
+	clear_input()
 	position = Vector3(0.0, 0.05, 5.0)
 	velocity = Vector3.ZERO
 	travel_distance = 0.0

@@ -10,8 +10,8 @@ var started: bool = false
 
 func _enter_tree() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	# Physical keys keep movement tied to the familiar WASD positions.
-	var bindings := {"move_left": KEY_A, "move_right": KEY_D, "move_up": KEY_W, "move_down": KEY_S, "pause": KEY_ESCAPE, "reset": KEY_R, "debug": KEY_F1}
+	# Menu actions stay separate from gameplay input and work while paused.
+	var bindings := {"pause": KEY_ESCAPE, "reset": KEY_R, "debug": KEY_F1}
 	for action: String in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -59,11 +59,11 @@ func pause() -> void:
 	get_tree().paused = true
 	player.velocity.x = 0.0
 	player.velocity.z = 0.0
-	for action in ["move_left", "move_right", "move_up", "move_down"]:
-		Input.action_release(action)
+	player.clear_input()
 	hud.show_menu(not started)
 
 func resume() -> void:
+	player.clear_input()
 	started = true
 	hud.hide_menu()
 	get_tree().paused = false

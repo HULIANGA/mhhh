@@ -46,7 +46,8 @@ python3 tools/dev.py serve     # 仅启动服务，不重新构建
 
 打开 `.tools/Godot.app`，导入根目录的 `project.godot`。Windows 则打开 `.tools/` 中的 Godot exe。主场景为 `scenes/main.tscn`。
 
-- `scripts/player.gd`：移动、地面投射朝向、可替换的角色占位模型。
+- `scripts/player.gd`：消费统一输入，控制移动、朝向与可替换的角色占位模型。
+- `scripts/input/`：统一输入帧与键鼠适配器，接口说明见 [统一游戏输入](docs/INPUT.md)。
 - `scripts/follow_camera.gd`：镜头距离和跟随速度。
 - `scripts/arena.gd`：地面、实体边界和检查点。
 - `scripts/main.gd`、`scripts/hud.gd`：流程、暂停与界面。
