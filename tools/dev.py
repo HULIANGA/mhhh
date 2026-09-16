@@ -128,6 +128,7 @@ def main():
         run("--script", "res://tests/monster_charge_test.gd")
         run("--script", "res://tests/monster_decision_test.gd")
         run("--script", "res://tests/battle_flow_test.gd")
+        run("--script", "res://tests/round_stability_test.gd")
     if args.command in ("web", "all", *preview_commands):
         export("web")
     if args.command in ("windows", "all"):
