@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/player.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/input/keyboard_mouse_input.gd" id="2"]
-[ext_resource type="Script" path="res://scripts/hunter_presentation.gd" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/presentation/hunter_presentation.tscn" id="3"]
 [sub_resource type="CapsuleShape3D" id="BodyShape"]
 radius = 0.34
 height = 1.65
@@ -17,10 +17,7 @@ script = ExtResource("1")
 position = Vector3(0, 0.825, 0)
 shape = SubResource("BodyShape")
 
-[node name="Visuals" type="Node3D" parent="."]
-
-[node name="Presentation" type="Node3D" parent="."]
-script = ExtResource("3")
+[node name="Presentation" parent="." instance=ExtResource("3")]
 
 [node name="InputSource" type="Node" parent="."]
 script = ExtResource("2")

@@ -33,14 +33,14 @@ func _run() -> void:
 	_prepare_encounter(Vector3(0, 0.05, -2.2))
 	await _until_phase(FieldMonster.PHASE_WINDUP)
 	_expect(monster.state == FieldMonster.STATE_ATTACKING and monster.attack_phase == FieldMonster.PHASE_WINDUP, "Entering sweep range starts the shared windup phase")
-	_expect(monster._health_label.text.contains("WINDUP"), "Windup exposes a readable placeholder warning")
+	_expect(monster._presentation.status_text().contains("WINDUP"), "Windup exposes a readable presentation warning")
 	await _until_phase(FieldMonster.PHASE_ACTIVE)
-	_expect(monster._health_label.text.contains("ACTIVE"), "Active frames expose a distinct placeholder warning")
+	_expect(monster._presentation.status_text().contains("ACTIVE"), "Active frames expose a distinct presentation warning")
 	_expect(hunter.health == hunter.max_health, "Red active warning appears briefly before horn probes can deal damage")
 	await _until_phase(FieldMonster.PHASE_RECOVERY)
 	_expect(observed_phases == [FieldMonster.PHASE_WINDUP, FieldMonster.PHASE_ACTIVE, FieldMonster.PHASE_RECOVERY], "Sweep advances through windup, active, and recovery in order")
 	_expect(hunter.health == hunter.max_health - FieldMonster.SWEEP_ATTACK.damage, "Sweep applies its configured damage exactly once across all active frames")
-	_expect(hunter._hit_feedback_time > 0.0 and hunter._feedback_materials[0].albedo_color != hunter._feedback_base_colors[0], "Accepted sweep plays a visible hunter flash and recoil reaction")
+	_expect(hunter._presentation.has_active_hit_feedback(), "Accepted sweep enters the hunter hit presentation state")
 	await _frames(18)
 	_expect(hunter.health == hunter.max_health - FieldMonster.SWEEP_ATTACK.damage, "One sweep cannot damage the hunter repeatedly")
 
@@ -76,11 +76,11 @@ func _run() -> void:
 	await _until_phase(FieldMonster.PHASE_RECOVERY)
 	await _frames(14)
 	_expect(hunter.health == hunter.max_health, "Dodge invulnerability fully avoids the sweep without a delayed hit")
-	_expect(hunter._hit_feedback_time <= 0.0, "A successfully dodged sweep does not play the hunter hit reaction")
+	_expect(not hunter._presentation.has_active_hit_feedback(), "A successfully dodged sweep does not play the hunter hit reaction")
 
 	var monster_health_before := monster.health
 	hunter.position = monster.position + Vector3(0, 0, 2.2)
-	hunter.visuals.rotation = Vector3.ZERO
+	hunter._presentation.set_facing_y(0.0)
 	hunter.velocity = Vector3.ZERO
 	await _tap_attack()
 	await _frames(24)
@@ -101,7 +101,7 @@ func _prepare_encounter(hunter_position: Vector3) -> void:
 	monster.rotation = Vector3.ZERO
 	monster.velocity = Vector3.ZERO
 	hunter.position = hunter_position
-	hunter.visuals.rotation = Vector3.ZERO
+	hunter._presentation.set_facing_y(0.0)
 	hunter.velocity = Vector3.ZERO
 
 func _until_phase(expected: StringName, maximum_frames: int = 180) -> void:

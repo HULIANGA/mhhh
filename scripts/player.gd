@@ -22,18 +22,7 @@ const CHARGE_ACTIONS: Array[CombatActionData] = [
 	preload("res://data/charge_2.tres"),
 ]
 const DODGE_ACTION: CombatActionData = preload("res://data/dodge.tres")
-# Blade-tip directions in hunter-local space. +X is the hunter's right,
-# -Z is forward, and +Y is vertically above the grip.
-const POSE_REST_FORWARD_UP := Vector3(0.0, 0.35, -0.94)
-const POSE_RIGHT_HIGH := Vector3(0.62, 0.58, -0.53)
-const POSE_LEFT_LOW := Vector3(-0.62, -0.48, -0.62)
-const POSE_STRAIGHT_DOWN := Vector3(0.0, -0.58, -0.82)
-const POSE_CHARGE_BACK := Vector3(0.0, 0.42, 0.91)
-const CHARGE_STRIKE_APEX := 0.34
 const CHARGE_CANCEL_DURATION := 0.22
-const HIT_FEEDBACK_DURATION := 0.24
-const BLADE_TOP_RIGHT_TILT := deg_to_rad(10.0)
-const BLADE_TOP_LEFT_TILT := deg_to_rad(-10.0)
 
 @export_range(1.0, 12.0) var move_speed: float = 5.2
 @export var acceleration: float = 32.0
@@ -72,27 +61,17 @@ var _hit_targets: Dictionary = {}
 var _resolved_incoming_attacks: Dictionary = {}
 var _dodge_direction := Vector3.ZERO
 var _stamina_delay_left: float = 0.0
-var _walk_time: float = 0.0
-var _hit_feedback_time: float = 0.0
-var _hit_recoil_direction := Vector3.ZERO
-var _feedback_materials: Array[StandardMaterial3D] = []
-var _feedback_base_colors: Array[Color] = []
-var _left_leg: MeshInstance3D
-var _right_leg: MeshInstance3D
-var _sword: Node3D
 var _presentation: HunterPresentation
 var _blade_base: Node3D
 var _blade_tip: Node3D
-var _sword_rest_position := Vector3(0.48, 0.92, -0.26)
-@onready var visuals: Node3D = $Visuals
+var visuals: Node3D
 @onready var input_source: HunterInputSource = $InputSource
 
 func _ready() -> void:
 	health = max_health
 	stamina = max_stamina
-	_build_placeholder()
 	_presentation = $Presentation as HunterPresentation
-	_presentation.bind_placeholder(visuals, _sword)
+	visuals = _presentation.visuals
 	_blade_base = _presentation.blade_base
 	_blade_tip = _presentation.blade_tip
 	health_changed.emit(health, max_health)
@@ -100,7 +79,7 @@ func _ready() -> void:
 	action_changed.emit("Ready", "Aim, then choose an action")
 
 func _physics_process(delta: float) -> void:
-	_update_hit_feedback(delta)
+	_presentation.update_hit_feedback(delta, is_defeated)
 	if is_defeated:
 		velocity = Vector3.ZERO
 		return
@@ -379,7 +358,7 @@ func _enter_defeated_state() -> void:
 	action_state = STATE_DEFEATED
 	action_phase = &"down"
 	velocity = Vector3.ZERO
-	visuals.rotation.z = deg_to_rad(-72.0)
+	_presentation.play_defeated()
 	action_changed.emit("Hunter down", "Press R to reset")
 	defeated.emit()
 
@@ -413,13 +392,10 @@ func _regenerate_stamina(delta: float) -> void:
 	stamina_changed.emit(stamina, max_stamina)
 
 func _forward() -> Vector3:
-	return (-visuals.global_basis.z).normalized()
+	return _presentation.forward()
 
 func _apply_aim(direction: Vector3, delta: float) -> void:
-	direction.y = 0.0
-	if direction.length_squared() > 0.0001:
-		var target_angle := atan2(-direction.x, -direction.z)
-		visuals.rotation.y = lerp_angle(visuals.rotation.y, target_angle, 1.0 - exp(-turn_speed * delta))
+	_presentation.face(direction, turn_speed, delta)
 
 func clear_input() -> void:
 	input_source.clear()
@@ -441,14 +417,10 @@ func reset() -> void:
 	position = Vector3(0.0, 0.05, 5.0)
 	velocity = Vector3.ZERO
 	travel_distance = 0.0
-	visuals.rotation = Vector3.ZERO
-	visuals.position = Vector3.ZERO
+	_presentation.reset_pose()
 	health = max_health
 	stamina = max_stamina
 	_resolved_incoming_attacks.clear()
-	_hit_feedback_time = 0.0
-	_hit_recoil_direction = Vector3.ZERO
-	_restore_feedback_materials()
 	_stamina_delay_left = 0.0
 	_finish_action()
 	health_changed.emit(health, max_health)
@@ -456,70 +428,23 @@ func reset() -> void:
 
 func _animate_walk(delta: float) -> void:
 	var speed := Vector2(velocity.x, velocity.z).length()
-	_walk_time += delta * speed * 2.8
-	var swing := sin(_walk_time) * 0.38 * minf(speed / move_speed, 1.0)
-	_left_leg.rotation.x = swing
-	_right_leg.rotation.x = -swing
-	visuals.position.y = absf(sin(_walk_time)) * 0.045 * minf(speed / move_speed, 1.0)
+	_presentation.animate_walk(delta, speed, move_speed)
 
 func _start_hit_feedback(hit_position: Vector3) -> void:
-	_hit_feedback_time = HIT_FEEDBACK_DURATION
-	_hit_recoil_direction = global_position - hit_position
-	_hit_recoil_direction.y = 0.0
-	if _hit_recoil_direction.length_squared() <= 0.0001:
-		_hit_recoil_direction = -_forward()
-	else:
-		_hit_recoil_direction = _hit_recoil_direction.normalized()
-
-func _update_hit_feedback(delta: float) -> void:
-	if _hit_feedback_time <= 0.0:
-		return
-	_hit_feedback_time = maxf(_hit_feedback_time - delta, 0.0)
-	var elapsed := HIT_FEEDBACK_DURATION - _hit_feedback_time
-	var pulse := sin(clampf(elapsed / HIT_FEEDBACK_DURATION, 0.0, 1.0) * PI)
-	for material in _feedback_materials:
-		material.albedo_color = Color("f06f68").lerp(Color("fff0dc"), pulse * 0.35)
-	if not is_defeated:
-		visuals.position.x = _hit_recoil_direction.x * 0.16 * pulse
-		visuals.position.z = _hit_recoil_direction.z * 0.16 * pulse
-		visuals.rotation.z = sin(elapsed * 58.0) * 0.11 * pulse
-	if _hit_feedback_time <= 0.0:
-		_restore_feedback_materials()
-		if not is_defeated:
-			visuals.position.x = 0.0
-			visuals.position.z = 0.0
-			visuals.rotation.z = 0.0
-
-func _restore_feedback_materials() -> void:
-	for index in range(mini(_feedback_materials.size(), _feedback_base_colors.size())):
-		_feedback_materials[index].albedo_color = _feedback_base_colors[index]
+	_presentation.start_hit_feedback(global_position, hit_position)
 
 func _animate_action() -> void:
-	if not _sword:
-		return
-	# SwordGripPivot never moves during an attack: all blade motion rotates around
-	# the hunter's hand at the center of the grip.
-	_sword.position = _sword_rest_position
-	_sword.quaternion = _sword_rest_pose()
-	if action_state == STATE_CHARGING:
-		_sword.quaternion = _charge_pose_at(_charge_elapsed)
-	elif action_state == STATE_CHARGE_CANCEL:
-		var cancel_progress := _smooth(_action_elapsed / CHARGE_CANCEL_DURATION)
-		_sword.quaternion = _charge_cancel_pose(cancel_progress)
-	elif action_state == STATE_LIGHT:
-		_animate_light_swing()
-	elif action_state == STATE_CHARGE_RELEASE:
-		_animate_charge_release()
-	elif action_state == STATE_DODGING:
-		visuals.rotation.x = sin(clampf(_action_elapsed / DODGE_ACTION.duration(), 0.0, 1.0) * PI) * -0.55
-		return
-	visuals.rotation.x = move_toward(visuals.rotation.x, 0.0, 0.18)
-
-func _animate_light_swing() -> void:
-	# Keep one readable light attack until the shared timing is settled.
-	_animate_sword_swing(
-		POSE_RIGHT_HIGH,
-		POSE_LEFT_LOW
+	_presentation.animate_action(
+		action_state,
+		action_phase,
+		_action_elapsed,
+		_charge_elapsed,
+		_charge_release_start_elapsed,
+		charge_tier,
+		_action_data,
+		CHARGE_ACTIONS[1].charge_threshold,
+		CHARGE_CANCEL_DURATION,
+		DODGE_ACTION.duration()
 	)
 
 func _update_attack_hold(delta: float) -> void:
@@ -542,202 +467,5 @@ func _cancel_attack_repeat() -> void:
 	_attack_hold_elapsed = 0.0
 	_auto_attack_active = false
 
-func _animate_charge_release() -> void:
-	# Tier I attacks immediately from the released pose instead of finishing the
-	# travel to the full-charge rear pose. Tier II already starts fully raised.
-	if _action_elapsed < _action_data.windup:
-		var windup_progress := _action_elapsed / maxf(_action_data.windup, 0.001)
-		if charge_tier == 1:
-			_sword.quaternion = _tier_one_windup_pose(_smooth(windup_progress))
-		else:
-			_sword.quaternion = _charge_pose_at(CHARGE_ACTIONS[1].charge_threshold)
-	elif _action_elapsed < _action_data.windup + _action_data.active:
-		var strike_progress := (_action_elapsed - _action_data.windup) / maxf(_action_data.active, 0.001)
-		if charge_tier == 1:
-			_sword.quaternion = _tier_one_downward_pose(_smooth(strike_progress))
-		else:
-			_sword.quaternion = _charged_strike_pose(_smooth(strike_progress))
-	else:
-		var recovery_progress := (_action_elapsed - _action_data.windup - _action_data.active) / maxf(_action_data.recovery, 0.001)
-		var recovery_direction := POSE_STRAIGHT_DOWN.normalized().slerp(
-			POSE_REST_FORWARD_UP.normalized(),
-			_smooth(recovery_progress)
-		)
-		_sword.quaternion = _fore_aft_pose(recovery_direction)
-
-func _charge_pose_at(elapsed: float) -> Quaternion:
-	var tension := _charge_tension_at(elapsed)
-	# Raise the tip in the vertical fore/aft plane while slowly rolling the blade
-	# from its ready-state right lean to a 10-degree left lean.
-	var blade_axis := POSE_REST_FORWARD_UP.normalized().slerp(POSE_CHARGE_BACK.normalized(), tension).normalized()
-	var blade_tilt := lerpf(BLADE_TOP_RIGHT_TILT, BLADE_TOP_LEFT_TILT, tension)
-	return _fore_aft_pose(blade_axis, blade_tilt)
-
-func _charge_cancel_pose(progress: float) -> Quaternion:
-	# Reverse the partial charging motion rather than snapping back to ready.
-	var release_tension := _charge_tension_at(_charge_release_start_elapsed)
-	var release_direction := POSE_REST_FORWARD_UP.normalized().slerp(
-		POSE_CHARGE_BACK.normalized(),
-		release_tension
-	).normalized()
-	var release_tilt := lerpf(BLADE_TOP_RIGHT_TILT, BLADE_TOP_LEFT_TILT, release_tension)
-	var blade_direction := release_direction.slerp(POSE_REST_FORWARD_UP.normalized(), progress).normalized()
-	var blade_tilt := lerpf(release_tilt, BLADE_TOP_RIGHT_TILT, progress)
-	return _fore_aft_pose(blade_direction, blade_tilt)
-
-func _tier_one_windup_pose(progress: float) -> Quaternion:
-	# Move from the exact partial-charge direction straight toward the overhead
-	# apex. This deliberately never visits the full-charge rear endpoint.
-	var release_tension := _charge_tension_at(_charge_release_start_elapsed)
-	var release_direction := POSE_REST_FORWARD_UP.normalized().slerp(
-		POSE_CHARGE_BACK.normalized(),
-		release_tension
-	).normalized()
-	var release_tilt := lerpf(BLADE_TOP_RIGHT_TILT, BLADE_TOP_LEFT_TILT, release_tension)
-	var blade_direction := release_direction.slerp(Vector3.UP, progress).normalized()
-	var blade_tilt := lerpf(release_tilt, BLADE_TOP_LEFT_TILT, progress)
-	return _fore_aft_pose(blade_direction, blade_tilt)
-
-func _tier_one_downward_pose(progress: float) -> Quaternion:
-	var blade_direction := Vector3.UP.slerp(POSE_STRAIGHT_DOWN.normalized(), progress).normalized()
-	var blade_tilt := lerpf(BLADE_TOP_LEFT_TILT, BLADE_TOP_RIGHT_TILT, progress)
-	return _fore_aft_pose(blade_direction, blade_tilt)
-
-func _charge_tension_at(elapsed: float) -> float:
-	return _smooth(minf(elapsed / CHARGE_ACTIONS[1].charge_threshold, 1.0))
-
-func _charged_strike_pose(progress: float) -> Quaternion:
-	# The downward cleave reverses the charging roll, finishing with the blade's
-	# upper direction leaning right again without changing the fore/aft path.
-	var blade_direction := _charged_strike_direction(progress)
-	var blade_tilt := lerpf(BLADE_TOP_LEFT_TILT, BLADE_TOP_RIGHT_TILT, progress)
-	return _fore_aft_pose(blade_direction, blade_tilt)
-
-func _charged_strike_direction(progress: float) -> Vector3:
-	# The endpoints are nearly opposite. A direct shortest-arc slerp travels
-	# underneath toward the hunter's back, so route explicitly over the head.
-	var clamped := clampf(progress, 0.0, 1.0)
-	if clamped < CHARGE_STRIKE_APEX:
-		return POSE_CHARGE_BACK.normalized().slerp(
-			Vector3.UP,
-			clamped / CHARGE_STRIKE_APEX
-		).normalized()
-	return Vector3.UP.slerp(
-		POSE_STRAIGHT_DOWN.normalized(),
-		(clamped - CHARGE_STRIKE_APEX) / (1.0 - CHARGE_STRIKE_APEX)
-	).normalized()
-
-func _animate_sword_swing(windup_direction: Vector3, strike_direction: Vector3) -> void:
-	if _action_elapsed < _action_data.windup:
-		var windup_progress := _action_elapsed / maxf(_action_data.windup, 0.001)
-		var blade_direction := POSE_REST_FORWARD_UP.normalized().slerp(
-			windup_direction.normalized(),
-			_smooth(windup_progress)
-		)
-		_sword.quaternion = _light_attack_pose(blade_direction)
-	elif _action_elapsed < _action_data.windup + _action_data.active:
-		var strike_progress := (_action_elapsed - _action_data.windup) / maxf(_action_data.active, 0.001)
-		var blade_direction := windup_direction.normalized().slerp(
-			strike_direction.normalized(),
-			_smooth(strike_progress)
-		)
-		_sword.quaternion = _light_attack_pose(blade_direction)
-	else:
-		# Recovery is always rendered in full. Buffered/held input may choose the
-		# next action, but it never skips the return-to-rest animation.
-		var recovery_progress := (_action_elapsed - _action_data.windup - _action_data.active) / maxf(_action_data.recovery, 0.001)
-		var blade_direction := strike_direction.normalized().slerp(
-			POSE_REST_FORWARD_UP.normalized(),
-			_smooth(recovery_progress)
-		)
-		_sword.quaternion = _light_attack_pose(blade_direction)
-
-func _blade_direction_pose(direction: Vector3) -> Quaternion:
-	# Preserve the original shortest-arc rotation used by attack and charge
-	# animations. Rest orientation is handled separately so changing how the
-	# sword is carried does not alter the established swing direction.
-	return Quaternion(Vector3.UP, direction.normalized())
-
-func _sword_rest_pose() -> Quaternion:
-	return _fore_aft_pose(POSE_REST_FORWARD_UP)
-
-func _fore_aft_pose(direction: Vector3, blade_top_tilt: float = BLADE_TOP_RIGHT_TILT) -> Quaternion:
-	# Build pitch and roll independently so the tip remains in the centered
-	# vertical plane even when the blade deliberately changes its lateral lean.
-	var blade_axis := Vector3(0.0, direction.y, direction.z).normalized()
-	var base_side := Vector3.RIGHT
-	var base_edge := blade_axis.cross(base_side).normalized()
-	# Local +X points toward the lower cutting edge, so shift it left to make
-	# a positive blade_top_tilt lean the blade's upper direction to the right.
-	var edge_axis := (base_edge * cos(blade_top_tilt) - base_side * sin(blade_top_tilt)).normalized()
-	var side_axis := edge_axis.cross(blade_axis).normalized()
-	return Basis(edge_axis, blade_axis, side_axis).get_rotation_quaternion()
-
-func _light_attack_pose(direction: Vector3) -> Quaternion:
-	# Bias the cutting edge down and slightly right for every sampled tip
-	# direction. Rebuilding the frame avoids axial roll from quaternion slerp.
-	var blade_axis := direction.normalized()
-	var edge_hint := Vector3.DOWN * cos(BLADE_TOP_RIGHT_TILT) - Vector3.RIGHT * sin(BLADE_TOP_RIGHT_TILT)
-	var edge_axis := (edge_hint - blade_axis * edge_hint.dot(blade_axis)).normalized()
-	var side_axis := edge_axis.cross(blade_axis).normalized()
-	return Basis(edge_axis, blade_axis, side_axis).get_rotation_quaternion()
-
-func _set_sword_rotation(from: Quaternion, to: Quaternion, weight: float) -> void:
-	_sword.quaternion = from.slerp(to, clampf(weight, 0.0, 1.0))
-
-func _smooth(value: float) -> float:
-	var clamped := clampf(value, 0.0, 1.0)
-	return clamped * clamped * (3.0 - 2.0 * clamped)
-
 func _roman(number: int) -> String:
 	return "II" if number == 2 else "I"
-
-func _build_placeholder() -> void:
-	var cloth := FieldGeometry.material(Color("78b9ab"))
-	var dark := FieldGeometry.material(Color("253739"))
-	var leather := FieldGeometry.material(Color("665645"))
-	var steel := FieldGeometry.material(Color("bdd0c8"))
-	var gold := FieldGeometry.material(Color("deb778"))
-	_feedback_materials = [cloth, dark, leather, steel]
-	_feedback_base_colors.clear()
-	for material in _feedback_materials:
-		_feedback_base_colors.append(material.albedo_color)
-	_left_leg = FieldGeometry.box(visuals, Vector3(0.23, 0.56, 0.26), Vector3(-0.19, 0.30, 0), dark)
-	_right_leg = FieldGeometry.box(visuals, Vector3(0.23, 0.56, 0.26), Vector3(0.19, 0.30, 0), dark)
-	FieldGeometry.box(visuals, Vector3(0.66, 0.65, 0.4), Vector3(0, 0.90, 0), cloth)
-	FieldGeometry.box(visuals, Vector3(0.70, 0.12, 0.43), Vector3(0, 0.67, 0), leather)
-	FieldGeometry.box(visuals, Vector3(0.27, 0.48, 0.28), Vector3(-0.46, 0.91, 0), leather)
-	FieldGeometry.box(visuals, Vector3(0.27, 0.48, 0.28), Vector3(0.46, 0.91, 0), leather)
-	var head := SphereMesh.new()
-	head.radius = 0.26
-	head.height = 0.52
-	head.radial_segments = 8
-	head.rings = 4
-	FieldGeometry.instance(visuals, head, Vector3(0, 1.48, 0), steel)
-	FieldGeometry.box(visuals, Vector3(0.36, 0.08, 0.10), Vector3(0, 1.49, -0.23), dark)
-	_sword = Node3D.new()
-	_sword.name = "SwordGripPivot"
-	visuals.add_child(_sword)
-	_sword.position = _sword_rest_position
-	_sword.quaternion = _sword_rest_pose()
-	var sword_model := Node3D.new()
-	sword_model.name = "SwordModel"
-	_sword.add_child(sword_model)
-	# Local origin is the grip center. Guard and blade extend toward +Y.
-	var grip := FieldGeometry.box(sword_model, Vector3(0.12, 0.42, 0.13), Vector3.ZERO, dark)
-	grip.name = "Grip"
-	# The blade width/cutting edge is local X, while the guard spans local Z.
-	var guard := FieldGeometry.box(sword_model, Vector3(0.17, 0.11, 0.58), Vector3(0, 0.25, 0), gold)
-	guard.name = "Guard"
-	var blade := FieldGeometry.box(sword_model, Vector3(0.30, 1.55, 0.11), Vector3(0, 1.08, 0), steel)
-	blade.name = "Blade"
-	var cutting_edge := FieldGeometry.box(sword_model, Vector3(0.035, 1.52, 0.13), Vector3(0.165, 1.08, 0), FieldGeometry.material(Color("e7f2ec")))
-	cutting_edge.name = "CuttingEdge"
-	FieldGeometry.ring(self, 0.60, 0.035, Vector3(0, 0.04, 0), FieldGeometry.material(Color("86d6bc"), 0.4))
-	var arrow := CylinderMesh.new()
-	arrow.top_radius = 0.0
-	arrow.bottom_radius = 0.17
-	arrow.height = 0.35
-	arrow.radial_segments = 3
-	var marker := FieldGeometry.instance(visuals, arrow, Vector3(0, 0.09, -0.9), gold)
-	marker.rotation.x = -PI / 2.0

@@ -56,14 +56,14 @@ func _run() -> void:
 	source.frame.aim_direction = Vector3.RIGHT
 	await _frames(45)
 	_expect(absf(hunter.velocity.x - hunter.move_speed * 0.5) < 0.01, "Analog magnitude controls movement speed")
-	_expect(absf(angle_difference(hunter.visuals.rotation.y, -PI / 2.0)) < 0.01, "World aim works without a mouse")
+	_expect(absf(angle_difference(hunter._presentation.facing_y(), -PI / 2.0)) < 0.01, "World aim works without a mouse")
 	source.frame.movement = Vector2(4, 4)
 	await _frames(20)
 	_expect(absf(Vector2(hunter.velocity.x, hunter.velocity.z).length() - hunter.move_speed) < 0.01, "Oversized input cannot exceed maximum speed")
-	var facing := hunter.visuals.rotation.y
+	var facing := hunter._presentation.facing_y()
 	source.frame.aim_direction = Vector3.ZERO
 	await _frames(10)
-	_expect(is_equal_approx(hunter.visuals.rotation.y, facing), "Neutral aim retains the last facing")
+	_expect(is_equal_approx(hunter._presentation.facing_y(), facing), "Neutral aim retains the last facing")
 	var before_clear := source.clear_count
 	game.pause()
 	_expect(source.clear_count == before_clear + 1 and source.frame.movement == Vector2.ZERO, "Pause clears an injected input source")
