@@ -52,7 +52,7 @@ func _run() -> void:
 	monster.max_health = Hunter.LIGHT_ACTION.damage
 	monster.reset_monster()
 	hunter.position = monster.position + Vector3(0, 0, 2.2)
-	hunter.visuals.rotation = Vector3.ZERO
+	hunter._presentation.set_facing_y(0.0)
 	hunter.velocity = Vector3.ZERO
 	await _frames(4)
 	await _tap_attack()

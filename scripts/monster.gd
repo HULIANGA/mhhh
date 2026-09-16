@@ -47,32 +47,29 @@ var _target: Hunter
 var _spawn_transform: Transform3D
 var _resolved_attacks: Dictionary = {}
 var _flash_time: float = 0.0
-var _walk_time: float = 0.0
 var _attack_data: MonsterAttackData
 var _attack_elapsed: float = 0.0
 var _locked_attack_direction := Vector3.FORWARD
 var _attack_resolved: bool = false
 var _charge_crashed: bool = false
 var _decision_rng := RandomNumberGenerator.new()
-var _body_material: StandardMaterial3D
-var _horn_material: StandardMaterial3D
-var _visuals: Node3D
-var _health_label: Label3D
-var _pounce_telegraph: Node3D
-var _charge_telegraph: MeshInstance3D
-var _left_foreleg: Node3D
-var _right_foreleg: Node3D
-var _left_hindleg: Node3D
-var _right_hindleg: Node3D
-var _left_horn: MeshInstance3D
-var _right_horn: MeshInstance3D
+var _presentation: MonsterPresentation
+var _left_horn_base: Node3D
+var _left_horn_tip: Node3D
+var _right_horn_base: Node3D
+var _right_horn_tip: Node3D
 
 func _ready() -> void:
 	name = "FieldMonster"
 	add_to_group("damageable")
 	_spawn_transform = global_transform
 	_target = get_node_or_null(target_path) as Hunter
-	_build_placeholder()
+	_presentation = $Presentation as MonsterPresentation
+	_presentation.setup(attack_range)
+	_left_horn_base = _presentation.left_horn_base
+	_left_horn_tip = _presentation.left_horn_tip
+	_right_horn_base = _presentation.right_horn_base
+	_right_horn_tip = _presentation.right_horn_tip
 	reset_monster()
 
 func _physics_process(delta: float) -> void:
@@ -137,7 +134,6 @@ func reset_monster() -> void:
 	distance_to_target = INF
 	_resolved_attacks.clear()
 	_flash_time = 0.0
-	_walk_time = 0.0
 	_attack_data = null
 	_attack_elapsed = 0.0
 	attack_phase = &"ready"
@@ -148,11 +144,7 @@ func reset_monster() -> void:
 	_decision_rng.seed = decision_seed
 	_attack_resolved = false
 	_charge_crashed = false
-	if _visuals:
-		_visuals.rotation = Vector3.ZERO
-		_visuals.position = Vector3.ZERO
-	_reset_attack_pose()
-	_hide_attack_telegraphs()
+	_presentation.reset_pose()
 	_set_state(STATE_IDLE, true)
 	_update_label()
 	health_changed.emit(health, max_health)
@@ -168,9 +160,8 @@ func _die() -> void:
 	_attack_data = null
 	attack_phase = &"ready"
 	_set_state(STATE_DEAD)
-	if _visuals:
-		_visuals.rotation.z = deg_to_rad(78.0)
-	_hide_attack_telegraphs()
+	_presentation.play_defeated()
+	_presentation.hide_attack_telegraphs()
 	_update_label()
 	defeated.emit()
 
@@ -246,11 +237,8 @@ func _finish_attack() -> void:
 	velocity.x = 0.0
 	velocity.z = 0.0
 	attack_phase = &"ready"
-	if _visuals and not is_dead:
-		_visuals.rotation = Vector3.ZERO
-		_visuals.position = Vector3.ZERO
-	_reset_attack_pose()
-	_hide_attack_telegraphs()
+	if not is_dead:
+		_presentation.reset_pose()
 	_set_state(STATE_READY)
 	_update_label()
 
@@ -311,7 +299,7 @@ func _set_attack_phase(next_phase: StringName, force_emit: bool = false) -> void
 		return
 	attack_phase = next_phase
 	if attack_phase != PHASE_WINDUP:
-		_hide_attack_telegraphs()
+		_presentation.hide_attack_telegraphs()
 	attack_phase_changed.emit(_attack_data.display_name, attack_phase)
 	_update_label()
 
@@ -323,9 +311,9 @@ func _resolve_sweep_hit() -> void:
 	# move with the animated model on every active physics tick.
 	var sphere := SphereShape3D.new()
 	sphere.radius = _attack_data.hit_radius
-	for horn: MeshInstance3D in [_left_horn, _right_horn]:
-		var horn_root := horn.to_global(Vector3(0.0, 0.0, 0.32))
-		var horn_tip := horn.to_global(Vector3(0.0, 0.0, -0.42))
+	for segment in [[_left_horn_base, _left_horn_tip], [_right_horn_base, _right_horn_tip]]:
+		var horn_root: Vector3 = segment[0].global_position
+		var horn_tip: Vector3 = segment[1].global_position
 		for fraction: float in [0.18, 0.42, 0.68, 0.9, 1.0]:
 			var query := PhysicsShapeQueryParameters3D.new()
 			query.shape = sphere
@@ -348,13 +336,11 @@ func _resolve_sweep_hit() -> void:
 func _resolve_motion_hit(from_position: Vector3, to_position: Vector3) -> void:
 	if _attack_resolved:
 		return
-	# Sweep a physical sphere along both the body center and the leading head
-	# path so a fast pounce cannot tunnel through the hunter between ticks.
-	var front_offset := _locked_attack_direction * 1.05 + Vector3.UP * 0.95
-	var center_offset := Vector3.UP * 0.85
-	for offset: Vector3 in [front_offset, center_offset]:
-		var path_start := from_position + offset
-		var path_end := to_position + offset
+	# Model-owned sockets keep moving hit paths aligned when the art is rescaled.
+	var travelled := to_position - from_position
+	for socket: Marker3D in _presentation.motion_probe_sockets():
+		var path_end := socket.global_position
+		var path_start := path_end - travelled
 		for fraction: float in [0.0, 0.25, 0.5, 0.75, 1.0]:
 			if _probe_hunter(path_start.lerp(path_end, fraction), _attack_data.hit_radius):
 				return
@@ -442,204 +428,17 @@ func _set_state(next_state: StringName, force_emit: bool = false) -> void:
 
 func _update_feedback(delta: float) -> void:
 	_flash_time = maxf(_flash_time - delta, 0.0)
-	if _body_material:
-		var phase_color := Color("75635a")
-		if state == STATE_ATTACKING:
-			if attack_phase == PHASE_WINDUP:
-				phase_color = Color("d19a58")
-			elif attack_phase == PHASE_ACTIVE:
-				phase_color = Color("d9574f")
-			elif attack_phase == PHASE_STUNNED:
-				phase_color = Color("536b78")
-			else:
-				phase_color = Color("617b78")
-		_body_material.albedo_color = Color("ef8e74") if _flash_time > 0.0 else phase_color
+	_presentation.update_feedback(state, attack_phase, _flash_time)
 
 func _animate_attack() -> void:
-	if not _visuals or not _attack_data:
-		return
-	if _attack_data.attack_id == &"pounce":
-		_animate_pounce()
-		return
-	if _attack_data.attack_id == &"charge":
-		_animate_charge()
-		return
-	if attack_phase == PHASE_WINDUP:
-		var progress := clampf(_attack_elapsed / _attack_data.windup, 0.0, 1.0)
-		_visuals.rotation.y = lerpf(0.0, -0.48, _smooth(progress))
-		_visuals.rotation.x = lerpf(0.0, 0.16, _smooth(progress))
-	elif attack_phase == PHASE_ACTIVE:
-		var progress := clampf((_attack_elapsed - _attack_data.windup) / _attack_data.active, 0.0, 1.0)
-		_visuals.rotation.y = lerpf(-0.48, 0.78, _smooth(progress))
-		_visuals.rotation.x = lerpf(0.16, -0.1, _smooth(progress))
-	else:
-		var progress := clampf((_attack_elapsed - _attack_data.windup - _attack_data.active) / _attack_data.recovery, 0.0, 1.0)
-		_visuals.rotation.y = lerpf(0.78, 0.0, _smooth(progress))
-		_visuals.rotation.x = lerpf(-0.1, 0.0, _smooth(progress))
-
-func _animate_pounce() -> void:
-	if attack_phase == PHASE_WINDUP:
-		var progress := clampf(_attack_elapsed / _attack_data.windup, 0.0, 1.0)
-		_visuals.rotation.x = lerpf(0.0, 0.34, _smooth(progress))
-		_visuals.position.y = lerpf(0.0, -0.16, _smooth(progress))
-		_left_foreleg.rotation.x = lerpf(0.0, 0.35, _smooth(progress))
-		_right_foreleg.rotation.x = lerpf(0.0, 0.35, _smooth(progress))
-		_left_hindleg.rotation.x = lerpf(0.0, -0.28, _smooth(progress))
-		_right_hindleg.rotation.x = lerpf(0.0, -0.28, _smooth(progress))
-	elif attack_phase == PHASE_ACTIVE:
-		var progress := clampf((_attack_elapsed - _attack_data.windup) / _attack_data.active, 0.0, 1.0)
-		_visuals.rotation.x = lerpf(0.34, -0.24, _smooth(progress))
-		_visuals.position.y = lerpf(-0.16, 0.0, _smooth(progress)) + sin(progress * PI) * 0.68
-		_left_foreleg.rotation.x = lerpf(0.35, -1.05, _smooth(minf(progress * 2.5, 1.0)))
-		_right_foreleg.rotation.x = lerpf(0.35, -1.05, _smooth(minf(progress * 2.5, 1.0)))
-	else:
-		var progress := clampf((_attack_elapsed - _attack_data.windup - _attack_data.active) / _attack_data.recovery, 0.0, 1.0)
-		_visuals.rotation.x = lerpf(-0.24, 0.0, _smooth(progress))
-		_visuals.position.y = lerpf(0.0, 0.0, progress)
-		_left_foreleg.rotation.x = lerpf(-1.05, 0.0, _smooth(progress))
-		_right_foreleg.rotation.x = lerpf(-1.05, 0.0, _smooth(progress))
-		_left_hindleg.rotation.x = lerpf(-0.28, 0.0, _smooth(progress))
-		_right_hindleg.rotation.x = lerpf(-0.28, 0.0, _smooth(progress))
-
-func _animate_charge() -> void:
-	if attack_phase == PHASE_WINDUP:
-		var progress := clampf(_attack_elapsed / _attack_data.windup, 0.0, 1.0)
-		_visuals.rotation.x = lerpf(0.0, 0.46, _smooth(progress))
-		_visuals.position.y = lerpf(0.0, -0.22, _smooth(progress))
-		_visuals.position.z = lerpf(0.0, 0.34, _smooth(minf(progress / 0.72, 1.0)))
-		var scrape := sin(progress * TAU * 2.0) * 0.5 * minf(progress * 3.0, 1.0)
-		_left_foreleg.rotation.x = scrape
-		_right_foreleg.rotation.x = -scrape * 0.35
-		_set_horn_charge_glow(0.35 + progress * 1.8)
-	elif attack_phase == PHASE_ACTIVE:
-		var progress := clampf((_attack_elapsed - _attack_data.windup) / _attack_data.active, 0.0, 1.0)
-		_visuals.rotation.x = lerpf(0.46, -0.34, minf(progress * 3.0, 1.0))
-		_visuals.position.y = lerpf(-0.22, 0.0, minf(progress * 3.0, 1.0))
-		_visuals.position.z = lerpf(0.34, 0.0, minf(progress * 4.0, 1.0))
-		_left_foreleg.rotation.x = lerpf(_left_foreleg.rotation.x, -0.22, minf(progress * 4.0, 1.0))
-		_right_foreleg.rotation.x = lerpf(_right_foreleg.rotation.x, -0.22, minf(progress * 4.0, 1.0))
-		_set_horn_charge_glow(2.4)
-	elif attack_phase == PHASE_STUNNED:
-		var progress := clampf((_attack_elapsed - _attack_data.windup - _attack_data.active) / CHARGE_CRASH_RECOVERY, 0.0, 1.0)
-		var fall := _smooth(minf(progress / 0.12, 1.0))
-		var rise := _smooth(clampf((progress - 0.78) / 0.22, 0.0, 1.0))
-		_visuals.rotation.x = lerpf(-0.34, 0.0, rise)
-		_visuals.rotation.z = lerpf(0.0, 1.28, fall) * (1.0 - rise)
-		_visuals.position.y = -0.18 * fall * (1.0 - rise)
-		_visuals.position.z = 0.0
-		_set_horn_charge_glow(lerpf(1.2, 0.0, rise))
-	else:
-		var progress := clampf((_attack_elapsed - _attack_data.windup - _attack_data.active) / _attack_data.recovery, 0.0, 1.0)
-		_visuals.rotation.x = lerpf(-0.34, 0.0, _smooth(progress))
-		_visuals.position.y = 0.0
-		_visuals.position.z = 0.0
-		_left_foreleg.rotation.x = lerpf(-0.22, 0.0, _smooth(progress))
-		_right_foreleg.rotation.x = lerpf(-0.22, 0.0, _smooth(progress))
-		_set_horn_charge_glow(lerpf(2.4, 0.0, _smooth(progress)))
-
-func _set_horn_charge_glow(energy: float) -> void:
-	if not _horn_material:
-		return
-	_horn_material.emission_enabled = energy > 0.01
-	_horn_material.emission = Color("f0b75e")
-	_horn_material.emission_energy_multiplier = energy
-
-func _reset_attack_pose() -> void:
-	for leg: Node3D in [_left_foreleg, _right_foreleg, _left_hindleg, _right_hindleg]:
-		if leg:
-			leg.rotation = Vector3.ZERO
-	_set_horn_charge_glow(0.0)
+	_presentation.animate_attack(_attack_data, attack_phase, _attack_elapsed, CHARGE_CRASH_RECOVERY)
 
 func _show_attack_telegraph() -> void:
-	_hide_attack_telegraphs()
-	if not _attack_data:
-		return
-	if _attack_data.attack_id == &"pounce" and _pounce_telegraph:
-		_pounce_telegraph.position.z = -_attack_data.movement_speed * _attack_data.active
-		_pounce_telegraph.show()
-	elif _attack_data.attack_id == &"charge" and _charge_telegraph:
-		var length := _attack_data.movement_speed * _attack_data.active
-		_charge_telegraph.scale.z = length
-		_charge_telegraph.position.z = -length * 0.5
-		_charge_telegraph.show()
-
-func _hide_attack_telegraphs() -> void:
-	if _pounce_telegraph:
-		_pounce_telegraph.hide()
-	if _charge_telegraph:
-		_charge_telegraph.hide()
-
-func _smooth(value: float) -> float:
-	var clamped := clampf(value, 0.0, 1.0)
-	return clamped * clamped * (3.0 - 2.0 * clamped)
+	_presentation.show_attack_telegraph(_attack_data)
 
 func _animate_walk(delta: float) -> void:
-	if not _visuals or is_dead:
-		return
 	var speed := Vector2(velocity.x, velocity.z).length()
-	_walk_time += delta * speed * 3.1
-	var swing := sin(_walk_time) * 0.38 * minf(speed / move_speed, 1.0)
-	_left_foreleg.rotation.x = swing
-	_right_hindleg.rotation.x = swing
-	_right_foreleg.rotation.x = -swing
-	_left_hindleg.rotation.x = -swing
-	_visuals.position.y = absf(sin(_walk_time * 2.0)) * 0.035 * minf(speed / move_speed, 1.0)
+	_presentation.animate_walk(delta, speed, move_speed, is_dead)
 
 func _update_label() -> void:
-	if not _health_label:
-		return
-	if health <= 0:
-		_health_label.text = "FIELD BEAST\nDOWN — R TO RESET"
-	elif state == STATE_ATTACKING and _attack_data:
-		_health_label.text = "FIELD BEAST  /  %d / %d\n%s — %s" % [health, max_health, _attack_data.display_name.to_upper(), String(attack_phase).to_upper()]
-	else:
-		_health_label.text = "FIELD BEAST\n%d / %d" % [health, max_health]
-
-func _build_placeholder() -> void:
-	_visuals = Node3D.new()
-	_visuals.name = "Visuals"
-	add_child(_visuals)
-	_body_material = FieldGeometry.material(Color("75635a"))
-	var hide := FieldGeometry.material(Color("51463f"))
-	_horn_material = FieldGeometry.material(Color("d7c99f"))
-	var warning := FieldGeometry.material(Color("c98665"), 0.28)
-	FieldGeometry.box(_visuals, Vector3(1.55, 1.05, 2.25), Vector3(0, 1.05, 0), _body_material)
-	FieldGeometry.box(_visuals, Vector3(1.25, 0.92, 0.92), Vector3(0, 1.12, -1.32), hide)
-	_left_horn = FieldGeometry.box(_visuals, Vector3(0.22, 0.22, 0.72), Vector3(-0.42, 1.38, -1.88), _horn_material)
-	_right_horn = FieldGeometry.box(_visuals, Vector3(0.22, 0.22, 0.72), Vector3(0.42, 1.38, -1.88), _horn_material)
-	_left_foreleg = _leg(Vector3(-0.52, 0.48, -0.66), hide)
-	_right_foreleg = _leg(Vector3(0.52, 0.48, -0.66), hide)
-	_left_hindleg = _leg(Vector3(-0.52, 0.48, 0.68), hide)
-	_right_hindleg = _leg(Vector3(0.52, 0.48, 0.68), hide)
-	FieldGeometry.ring(self, attack_range, 0.045, Vector3(0, 0.055, 0), warning)
-	_build_attack_telegraphs()
-	_health_label = Label3D.new()
-	_health_label.position = Vector3(0, 2.2, 0)
-	_health_label.font_size = 42
-	_health_label.pixel_size = 0.008
-	_health_label.modulate = Color("eadab5")
-	_health_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	add_child(_health_label)
-
-func _build_attack_telegraphs() -> void:
-	var pounce_material := FieldGeometry.material(Color("e5c268"), 0.55)
-	pounce_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	pounce_material.albedo_color.a = 0.52
-	_pounce_telegraph = Node3D.new()
-	_pounce_telegraph.name = "PounceLandingTelegraph"
-	add_child(_pounce_telegraph)
-	FieldGeometry.ring(_pounce_telegraph, 1.15, 0.11, Vector3(0, 0.02, 0), pounce_material)
-	var charge_material := FieldGeometry.material(Color("e46f45"), 0.72)
-	charge_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	charge_material.albedo_color.a = 0.42
-	_charge_telegraph = FieldGeometry.box(self, Vector3(1.7, 0.025, 1.0), Vector3.ZERO, charge_material)
-	_charge_telegraph.name = "ChargePathTelegraph"
-	_charge_telegraph.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_hide_attack_telegraphs()
-
-func _leg(at: Vector3, material: Material) -> Node3D:
-	var pivot := Node3D.new()
-	pivot.position = at
-	_visuals.add_child(pivot)
-	FieldGeometry.box(pivot, Vector3(0.34, 0.9, 0.38), Vector3(0, -0.32, 0), material)
-	return pivot
+	_presentation.update_status(health, max_health, state, _attack_data, attack_phase)

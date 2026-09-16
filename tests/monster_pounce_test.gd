@@ -31,13 +31,13 @@ func _run() -> void:
 	_prepare_encounter(Vector3(0, 0.05, -5.0))
 	await _until_phase(FieldMonster.PHASE_WINDUP)
 	_expect(monster._attack_data == FieldMonster.POUNCE_ATTACK, "Medium range selects the configured pounce instead of the close sweep")
-	_expect(monster._health_label.text.contains("POUNCE") and monster._health_label.text.contains("WINDUP"), "Pounce windup has a readable phase warning")
-	_expect(monster._pounce_telegraph.visible and not monster._charge_telegraph.visible, "Pounce windup shows a compact landing marker instead of a charge lane")
+	_expect(monster._presentation.status_text().contains("POUNCE") and monster._presentation.status_text().contains("WINDUP"), "Pounce windup has a readable phase warning")
+	_expect(monster._presentation.pounce_telegraph_visible() and not monster._presentation.charge_telegraph_visible(), "Pounce windup shows a compact landing marker instead of a charge lane")
 	var pounce_start := monster.position
 	await _until_phase(FieldMonster.PHASE_ACTIVE)
 	var locked_direction := monster._locked_attack_direction
 	await _frames(8)
-	_expect(monster._visuals.position.y > 0.3 and monster._left_foreleg.rotation.x < -0.35, "Pounce has a visible airborne silhouette with raised forelegs")
+	_expect(monster._presentation.is_airborne(), "Pounce enters the presentation adapter's airborne state")
 	await _until_phase(FieldMonster.PHASE_RECOVERY)
 	var pounce_displacement := monster.position - pounce_start
 	pounce_displacement.y = 0.0
@@ -69,7 +69,7 @@ func _run() -> void:
 
 	var monster_health_before := monster.health
 	hunter.position = monster.position + Vector3(0, 0.05, 2.2)
-	hunter.visuals.rotation = Vector3.ZERO
+	hunter._presentation.set_facing_y(0.0)
 	hunter.velocity = Vector3.ZERO
 	while hunter.action_state != Hunter.STATE_FREE:
 		await physics_frame
@@ -97,7 +97,7 @@ func _prepare_encounter(hunter_position: Vector3) -> void:
 	monster.rotation = Vector3.ZERO
 	monster.velocity = Vector3.ZERO
 	hunter.position = hunter_position
-	hunter.visuals.rotation = Vector3.ZERO
+	hunter._presentation.set_facing_y(0.0)
 	hunter.velocity = Vector3.ZERO
 
 func _until_phase(expected: StringName, maximum_frames: int = 180) -> void:

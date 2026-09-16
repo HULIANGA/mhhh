@@ -31,10 +31,10 @@ func _run() -> void:
 	_prepare_encounter(Vector3(4, 0.05, -5.0), Vector3(4, 0.05, 8.0))
 	await _until_phase(FieldMonster.PHASE_WINDUP)
 	_expect(monster._attack_data == FieldMonster.CHARGE_ATTACK, "Far range selects charge while medium and close ranges remain assigned to pounce and sweep")
-	_expect(monster._health_label.text.contains("CHARGE") and monster._health_label.text.contains("WINDUP"), "Charge windup exposes a readable warning")
+	_expect(monster._presentation.status_text().contains("CHARGE") and monster._presentation.status_text().contains("WINDUP"), "Charge windup exposes a readable warning")
 	await _frames(24)
-	_expect(monster._charge_telegraph.visible and monster._charge_telegraph.scale.z > 12.0 and not monster._pounce_telegraph.visible, "Charge windup shows a long lane instead of a landing marker")
-	_expect(monster._visuals.position.z > 0.1 and monster._horn_material.emission_enabled, "Charge windup visibly steps back, scrapes, and lights the lowered horns")
+	_expect(monster._presentation.charge_telegraph_visible() and monster._presentation.charge_telegraph_length() > 12.0 and not monster._presentation.pounce_telegraph_visible(), "Charge windup shows a long lane instead of a landing marker")
+	_expect(monster._presentation.horn_glowing(), "Charge windup activates the presentation adapter's horn warning")
 	var charge_start := monster.position
 	await _until_phase(FieldMonster.PHASE_ACTIVE)
 	var locked_direction := monster._locked_attack_direction
@@ -67,7 +67,7 @@ func _run() -> void:
 	charge_displacement.y = 0.0
 	_expect(monster.position.z >= monster.arena_min.y - 0.01 and charge_displacement.length() < FieldMonster.CHARGE_ATTACK.movement_speed * FieldMonster.CHARGE_ATTACK.active, "Arena boundary stops charge and triggers the stunned phase")
 	await _frames(18)
-	_expect(monster.attack_phase == FieldMonster.PHASE_STUNNED and absf(monster._visuals.rotation.z) > 0.8, "Crashing into an indestructible boundary leaves the monster visibly down")
+	_expect(monster.attack_phase == FieldMonster.PHASE_STUNNED and monster._presentation.is_knocked_down(), "Crashing into an indestructible boundary leaves the monster visibly down")
 
 	_prepare_encounter(Vector3(-3.0, 0.05, -10.0), Vector3(-3.0, 0.05, 6.0))
 	hunter.collision_layer = 0
@@ -110,7 +110,7 @@ func _prepare_encounter(hunter_position: Vector3, monster_position: Vector3 = Ve
 	monster.rotation = Vector3.ZERO
 	monster.velocity = Vector3.ZERO
 	hunter.position = hunter_position
-	hunter.visuals.rotation = Vector3.ZERO
+	hunter._presentation.set_facing_y(0.0)
 	hunter.velocity = Vector3.ZERO
 
 func _until_phase(expected: StringName, maximum_frames: int = 240) -> void:

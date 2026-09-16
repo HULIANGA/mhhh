@@ -30,38 +30,39 @@ func _run() -> void:
 	game.resume()
 	await _position_for_combat()
 
-	var sword_pivot: Node3D = hunter.visuals.get_node("SwordGripPivot")
+	var presentation := hunter.get_node("Presentation") as HunterPresentation
+	var sword_pivot: Node3D = presentation.weapon_socket
 	var grip_origin := sword_pivot.position
-	_expect(sword_pivot.get_node("SwordModel/Grip").position.is_zero_approx(), "Sword pivot is centered on the grip")
+	_expect(presentation.blade_base != null and presentation.blade_tip != null, "Weapon animation uses the stable blade socket contract")
 	var ready_blade_axis := sword_pivot.basis.y.normalized()
 	_expect(ready_blade_axis.z < -0.9 and ready_blade_axis.y > 0.3, "Sword tip points forward and slightly upward while ready")
 	_expect(sword_pivot.basis.x.normalized().dot(Vector3.DOWN) > 0.85 and sword_pivot.basis.x.normalized().x < -0.1, "Sword blade's upper direction leans slightly right while ready")
-	var rear_charge_basis := Basis(hunter._fore_aft_pose(Hunter.POSE_CHARGE_BACK))
-	var rear_blade_axis := Hunter.POSE_CHARGE_BACK.normalized()
+	var rear_charge_basis := Basis(presentation.fore_aft_pose(HunterPresentation.POSE_CHARGE_BACK))
+	var rear_blade_axis := HunterPresentation.POSE_CHARGE_BACK.normalized()
 	var rear_base_edge := rear_blade_axis.cross(Vector3.RIGHT).normalized()
-	var expected_right_edge := (rear_base_edge * cos(Hunter.BLADE_TOP_RIGHT_TILT) - Vector3.RIGHT * sin(Hunter.BLADE_TOP_RIGHT_TILT)).normalized()
+	var expected_right_edge := (rear_base_edge * cos(HunterPresentation.BLADE_TOP_RIGHT_TILT) - Vector3.RIGHT * sin(HunterPresentation.BLADE_TOP_RIGHT_TILT)).normalized()
 	_expect(rear_charge_basis.x.normalized().dot(expected_right_edge) > 0.999, "Fore-aft pose accepts the ready-state right tilt")
-	var full_charge_basis := Basis(hunter._charge_pose_at(Hunter.CHARGE_ACTIONS[1].charge_threshold))
-	var expected_left_edge := (rear_base_edge * cos(Hunter.BLADE_TOP_LEFT_TILT) - Vector3.RIGHT * sin(Hunter.BLADE_TOP_LEFT_TILT)).normalized()
+	var full_charge_basis := Basis(presentation.charge_pose_at(Hunter.CHARGE_ACTIONS[1].charge_threshold, Hunter.CHARGE_ACTIONS[1].charge_threshold))
+	var expected_left_edge := (rear_base_edge * cos(HunterPresentation.BLADE_TOP_LEFT_TILT) - Vector3.RIGHT * sin(HunterPresentation.BLADE_TOP_LEFT_TILT)).normalized()
 	_expect(full_charge_basis.x.normalized().dot(expected_left_edge) > 0.999, "Raising the charged sword finishes with its upper direction tilted left")
-	var strike_start_basis := Basis(hunter._charged_strike_pose(0.0))
-	var strike_finish_basis := Basis(hunter._charged_strike_pose(1.0))
-	var finish_blade_axis := Hunter.POSE_STRAIGHT_DOWN.normalized()
+	var strike_start_basis := Basis(presentation.charged_strike_pose(0.0))
+	var strike_finish_basis := Basis(presentation.charged_strike_pose(1.0))
+	var finish_blade_axis := HunterPresentation.POSE_STRAIGHT_DOWN.normalized()
 	var finish_base_edge := finish_blade_axis.cross(Vector3.RIGHT).normalized()
-	var expected_finish_edge := (finish_base_edge * cos(Hunter.BLADE_TOP_RIGHT_TILT) - Vector3.RIGHT * sin(Hunter.BLADE_TOP_RIGHT_TILT)).normalized()
+	var expected_finish_edge := (finish_base_edge * cos(HunterPresentation.BLADE_TOP_RIGHT_TILT) - Vector3.RIGHT * sin(HunterPresentation.BLADE_TOP_RIGHT_TILT)).normalized()
 	_expect(strike_start_basis.x.normalized().dot(expected_left_edge) > 0.999 and strike_finish_basis.x.normalized().dot(expected_finish_edge) > 0.999, "Charged cleave rolls smoothly from a left tilt back to a right tilt")
-	var rear_z := Hunter.POSE_CHARGE_BACK.normalized().z
-	var leaving_rear_z := hunter._charged_strike_direction(Hunter.CHARGE_STRIKE_APEX * 0.5).z
-	var apex_z := hunter._charged_strike_direction(Hunter.CHARGE_STRIKE_APEX).z
-	var forward_z := hunter._charged_strike_direction(0.65).z
-	var finish_z := hunter._charged_strike_direction(1.0).z
+	var rear_z := HunterPresentation.POSE_CHARGE_BACK.normalized().z
+	var leaving_rear_z := presentation.charged_strike_direction(HunterPresentation.CHARGE_STRIKE_APEX * 0.5).z
+	var apex_z := presentation.charged_strike_direction(HunterPresentation.CHARGE_STRIKE_APEX).z
+	var forward_z := presentation.charged_strike_direction(0.65).z
+	var finish_z := presentation.charged_strike_direction(1.0).z
 	_expect(leaving_rear_z < rear_z and absf(apex_z) < 0.001 and forward_z < 0.0 and finish_z < -0.7, "Charged cleave travels from the rear over the head and finishes forward")
 	await _tap("attack")
 	var minimum_light_edge_alignment := 1.0
 	for frame_index in range(10):
 		await physics_frame
 		var blade_axis := sword_pivot.basis.y.normalized()
-		var edge_hint := Vector3.DOWN * cos(Hunter.BLADE_TOP_RIGHT_TILT) - Vector3.RIGHT * sin(Hunter.BLADE_TOP_RIGHT_TILT)
+		var edge_hint := Vector3.DOWN * cos(HunterPresentation.BLADE_TOP_RIGHT_TILT) - Vector3.RIGHT * sin(HunterPresentation.BLADE_TOP_RIGHT_TILT)
 		var expected_edge := (edge_hint - blade_axis * edge_hint.dot(blade_axis)).normalized()
 		minimum_light_edge_alignment = minf(minimum_light_edge_alignment, sword_pivot.basis.x.normalized().dot(expected_edge))
 	_expect(minimum_light_edge_alignment > 0.999, "Light attack keeps a stable cutting-edge orientation without axial rotation")
@@ -118,7 +119,7 @@ func _run() -> void:
 
 	game.reset_exercise()
 	await _position_for_combat()
-	sword_pivot = hunter.visuals.get_node("SwordGripPivot")
+	sword_pivot = presentation.weapon_socket
 	var previous_token := hunter._attack_token
 	var previous_start_frame := -1
 	var minimum_start_gap := 10000
@@ -212,7 +213,7 @@ func _run() -> void:
 	await _frames(15)
 	_expect(hunter.stamina < 96.0 and hunter.stamina > 92.0, "Holding charge drains stamina gradually over time")
 	var early_release_pose := sword_pivot.quaternion
-	var early_distance_to_ready := early_release_pose.angle_to(hunter._sword_rest_pose())
+	var early_distance_to_ready := early_release_pose.angle_to(presentation.rest_pose())
 	source.frame = HunterInputFrame.new()
 	source.frame.charge.released = true
 	await _frames(1)
@@ -220,7 +221,7 @@ func _run() -> void:
 	_expect(hunter.action_state == Hunter.STATE_CHARGE_CANCEL and early_release_pose.angle_to(sword_pivot.quaternion) < 0.15, "Early release starts a continuous return from the current charge pose")
 	source.frame = HunterInputFrame.new()
 	await _frames(5)
-	_expect(sword_pivot.quaternion.angle_to(hunter._sword_rest_pose()) < early_distance_to_ready, "Cancelled charge animates progressively back toward ready")
+	_expect(sword_pivot.quaternion.angle_to(presentation.rest_pose()) < early_distance_to_ready, "Cancelled charge animates progressively back toward ready")
 	await _frames(70)
 	_expect(hunter.action_state == Hunter.STATE_FREE and target.hit_count == 0, "Releasing before tier I returns to ready without attacking")
 
@@ -312,7 +313,7 @@ func _run() -> void:
 func _position_for_combat() -> void:
 	hunter.position = Vector3(0, 0.05, 2.2)
 	hunter.velocity = Vector3.ZERO
-	hunter.visuals.rotation = Vector3.ZERO
+	hunter._presentation.set_facing_y(0.0)
 	source.frame = HunterInputFrame.new()
 	await _frames(4)
 
