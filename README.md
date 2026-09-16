@@ -12,10 +12,18 @@ M2 已于 2026-09-16 通过输入、移动和战斗回归及浏览器人工验�
 
 ```sh
 python3 tools/setup.py
-python3 tools/dev.py preview
+python3 tools/dev.py preview-local
 ```
 
 打开 **http://127.0.0.1:8060**。Windows 上命令中的 `python3` 可替换为 `py -3`。预览服务只绑定本机，停止时按 Ctrl+C。
+
+需要让同一局域网内的其他设备访问时，改用：
+
+```sh
+python3 tools/dev.py preview-lan
+```
+
+终端会显示局域网访问地址。`preview-local` 仅监听 `127.0.0.1`，`preview-lan` 监听所有网络接口；日常本机调试优先使用前者。
 
 已有引擎时可设置 `GODOT_BIN` 为可执行文件路径；导出仍需要运行安装脚本获取匹配模板。不要直接双击 `index.html`，必须通过 HTTP 服务加载。
 
@@ -40,10 +48,11 @@ python3 tools/dev.py test      # 使用真实场景运行输入、移动、战�
 python3 tools/dev.py web       # build/web/index.html
 python3 tools/dev.py windows   # build/windows/MHHH.exe
 python3 tools/dev.py all       # 两个平台一起导出
-python3 tools/dev.py serve     # 仅启动服务，不重新构建
+python3 tools/dev.py serve-local # 仅本机启动服务，不重新构建
+python3 tools/dev.py serve-lan   # 局域网启动服务，不重新构建
 ```
 
-修改代码后重新运行 `web` 并刷新浏览器；`serve` 不会自动重建。Windows 可执行文件需要在 Windows 实机验收，Mac 上导出成功不代表已通过运行验收。
+修改代码后重新运行 `web` 并刷新浏览器；`serve-local` 和 `serve-lan` 不会自动重建。旧命令 `preview`、`serve` 仍兼容，并继续按仅本机模式运行。Windows 可执行文件需要在 Windows 实机验收，Mac 上导出成功不代表已通过运行验收。
 
 ## 用编辑器学习
 

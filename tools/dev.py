@@ -1,4 +1,4 @@
-"""One entry point for import, tests, exports, and localhost-only Web preview."""
+"""One entry point for imports, tests, exports, and Web previews."""
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -7,6 +7,7 @@ import errno
 import os
 import platform
 import re
+import socket
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,45 +51,84 @@ class PreviewHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
 
+def lan_addresses():
+    addresses = set()
+    try:
+        addresses.update(
+            address[4][0]
+            for address in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)
+        )
+    except socket.gaierror:
+        pass
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("192.0.2.1", 9))
+            addresses.add(probe.getsockname()[0])
+    except OSError:
+        pass
+    return sorted(address for address in addresses if not address.startswith("127."))
+
+
+def serve(host, port):
+    directory = ROOT / "build/web"
+    if not (directory / "index.html").is_file():
+        raise SystemExit("No Web build. Run python3 tools/dev.py web first.")
+    server = None
+    selected_port = port
+    for candidate in range(port, port + 10):
+        try:
+            server = ThreadingHTTPServer((host, candidate), partial(PreviewHandler, directory=str(directory)))
+            selected_port = candidate
+            break
+        except OSError as error:
+            if error.errno != errno.EADDRINUSE:
+                raise
+    if server is None:
+        raise SystemExit(f"Ports {port}–{port + 9} are already in use. Choose another with --port.")
+    if selected_port != port:
+        print(f"Port {port} is already in use; using {selected_port} instead.", flush=True)
+    if host == "127.0.0.1":
+        print(f"Local preview: http://127.0.0.1:{selected_port}  (Ctrl+C to stop)", flush=True)
+    else:
+        addresses = lan_addresses()
+        urls = ", ".join(f"http://{address}:{selected_port}" for address in addresses)
+        print(f"LAN preview: {urls or f'http://<this-device-ip>:{selected_port}'}  (Ctrl+C to stop)", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["check", "test", "web", "windows", "all", "serve", "preview"])
+    parser.add_argument(
+        "command",
+        choices=[
+            "check", "test", "web", "windows", "all",
+            "serve-local", "serve-lan", "preview-local", "preview-lan",
+            "serve", "preview",
+        ],
+    )
     parser.add_argument("--port", type=int, default=8060)
     args = parser.parse_args()
-    if args.command not in ("serve",):
+    serve_commands = ("serve", "serve-local", "serve-lan")
+    preview_commands = ("preview", "preview-local", "preview-lan")
+    if args.command not in serve_commands:
         import_project()
     if args.command == "test":
         run("--script", "res://tests/input_test.gd")
         run("--script", "res://tests/movement_test.gd")
         run("--script", "res://tests/combat_test.gd")
         run("--script", "res://tests/vitality_test.gd")
-    if args.command in ("web", "all", "preview"):
+    if args.command in ("web", "all", *preview_commands):
         export("web")
     if args.command in ("windows", "all"):
         export("windows")
-    if args.command in ("serve", "preview"):
-        directory = ROOT / "build/web"
-        if not (directory / "index.html").is_file():
-            raise SystemExit("No Web build. Run python3 tools/dev.py web first.")
-        server = None
-        selected_port = args.port
-        for candidate in range(args.port, args.port + 10):
-            try:
-                server = ThreadingHTTPServer(("127.0.0.1", candidate), partial(PreviewHandler, directory=str(directory)))
-                selected_port = candidate
-                break
-            except OSError as error:
-                if error.errno != errno.EADDRINUSE:
-                    raise
-        if server is None:
-            raise SystemExit(f"Ports {args.port}–{args.port + 9} are already in use. Choose another with --port.")
-        if selected_port != args.port:
-            print(f"Port {args.port} is already in use; using {selected_port} instead.", flush=True)
-        print(f"Preview: http://127.0.0.1:{selected_port}  (Ctrl+C to stop)", flush=True)
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            server.server_close()
+    if args.command in (*serve_commands, *preview_commands):
+        host = "0.0.0.0" if args.command.endswith("-lan") else "127.0.0.1"
+        serve(host, args.port)
 
 
 if __name__ == "__main__":
