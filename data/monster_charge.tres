@@ -4,15 +4,15 @@
 
 [resource]
 script = ExtResource("1")
-display_name = "Pounce"
-attack_id = &"pounce"
-windup = 0.68
-active = 0.38
-recovery = 0.9
-damage = 30
-hit_radius = 0.62
+display_name = "Charge"
+attack_id = &"charge"
+windup = 0.9
+active = 1.15
+recovery = 1.05
+damage = 36
+hit_radius = 0.68
 hit_delay = 0.0
-movement_speed = 9.0
-minimum_range = 3.4
-maximum_range = 7.2
-cooldown = 0.65
+movement_speed = 12.5
+minimum_range = 7.3
+maximum_range = 24.0
+cooldown = 0.9

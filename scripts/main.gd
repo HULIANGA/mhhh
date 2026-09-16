@@ -4,7 +4,7 @@ const HUD = preload("res://scripts/hud.gd")
 var hud: CanvasLayer
 var started: bool = false
 @onready var player: Hunter = $Player
-@onready var arena: Node3D = $Arena
+@onready var arena: FieldArena = $Arena
 @onready var camera: Camera3D = $Camera3D
 @onready var training_dummy: TrainingDummy = $Arena/TrainingDummy
 @onready var monster: FieldMonster = $FieldMonster
@@ -77,6 +77,7 @@ func resume() -> void:
 func reset_exercise() -> void:
 	player.reset()
 	training_dummy.reset_target()
+	arena.reset_obstacles()
 	monster.reset_monster()
 	camera.snap_to_target()
 	resume()

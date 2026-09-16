@@ -15,8 +15,11 @@ const STATE_DEAD: StringName = &"dead"
 const PHASE_WINDUP: StringName = &"windup"
 const PHASE_ACTIVE: StringName = &"active"
 const PHASE_RECOVERY: StringName = &"recovery"
+const PHASE_STUNNED: StringName = &"stunned"
+const CHARGE_CRASH_RECOVERY: float = 2.2
 const SWEEP_ATTACK: MonsterAttackData = preload("res://data/monster_sweep.tres")
 const POUNCE_ATTACK: MonsterAttackData = preload("res://data/monster_pounce.tres")
+const CHARGE_ATTACK: MonsterAttackData = preload("res://data/monster_charge.tres")
 
 @export_range(1, 999) var max_health: int = 180
 @export_range(0.1, 12.0) var move_speed: float = 3.6
@@ -35,6 +38,7 @@ var is_dead: bool = false
 var distance_to_target: float = INF
 var attack_phase: StringName = &"ready"
 var attack_token: int = 0
+var attack_cooldown_left: float = 0.0
 var _target: Hunter
 var _spawn_transform: Transform3D
 var _resolved_attacks: Dictionary = {}
@@ -44,9 +48,13 @@ var _attack_data: MonsterAttackData
 var _attack_elapsed: float = 0.0
 var _locked_attack_direction := Vector3.FORWARD
 var _attack_resolved: bool = false
+var _charge_crashed: bool = false
 var _body_material: StandardMaterial3D
+var _horn_material: StandardMaterial3D
 var _visuals: Node3D
 var _health_label: Label3D
+var _pounce_telegraph: Node3D
+var _charge_telegraph: MeshInstance3D
 var _left_foreleg: Node3D
 var _right_foreleg: Node3D
 var _left_hindleg: Node3D
@@ -67,6 +75,7 @@ func _physics_process(delta: float) -> void:
 	if is_dead:
 		velocity = Vector3.ZERO
 		return
+	attack_cooldown_left = maxf(attack_cooldown_left - delta, 0.0)
 	if state == STATE_ATTACKING:
 		_advance_attack(delta)
 		return
@@ -82,13 +91,18 @@ func _physics_process(delta: float) -> void:
 		_stop(STATE_IDLE, delta)
 		return
 	_face(offset, delta)
-	if attacks_enabled and distance_to_target >= POUNCE_ATTACK.minimum_range and distance_to_target <= POUNCE_ATTACK.maximum_range:
-		_stop(STATE_READY, delta)
-		_start_attack(POUNCE_ATTACK)
-		return
+	if attacks_enabled and attack_cooldown_left <= 0.0:
+		if distance_to_target >= CHARGE_ATTACK.minimum_range and distance_to_target <= CHARGE_ATTACK.maximum_range:
+			_stop(STATE_READY, delta)
+			_start_attack(CHARGE_ATTACK)
+			return
+		if distance_to_target >= POUNCE_ATTACK.minimum_range and distance_to_target <= POUNCE_ATTACK.maximum_range:
+			_stop(STATE_READY, delta)
+			_start_attack(POUNCE_ATTACK)
+			return
 	if distance_to_target <= attack_range:
 		_stop(STATE_READY, delta)
-		if attacks_enabled:
+		if attacks_enabled and attack_cooldown_left <= 0.0:
 			_start_attack(SWEEP_ATTACK)
 		return
 	_set_state(STATE_CHASING)
@@ -128,10 +142,14 @@ func reset_monster() -> void:
 	_attack_elapsed = 0.0
 	attack_phase = &"ready"
 	attack_token = 0
+	attack_cooldown_left = 0.0
 	_attack_resolved = false
+	_charge_crashed = false
 	if _visuals:
 		_visuals.rotation = Vector3.ZERO
 		_visuals.position = Vector3.ZERO
+	_reset_attack_pose()
+	_hide_attack_telegraphs()
 	_set_state(STATE_IDLE, true)
 	_update_label()
 	health_changed.emit(health, max_health)
@@ -149,6 +167,7 @@ func _die() -> void:
 	_set_state(STATE_DEAD)
 	if _visuals:
 		_visuals.rotation.z = deg_to_rad(78.0)
+	_hide_attack_telegraphs()
 	_update_label()
 	defeated.emit()
 
@@ -156,18 +175,19 @@ func _start_attack(data: MonsterAttackData) -> void:
 	_attack_data = data
 	_attack_elapsed = 0.0
 	_attack_resolved = false
+	_charge_crashed = false
 	attack_token += 1
 	velocity.x = 0.0
 	velocity.z = 0.0
 	_set_state(STATE_ATTACKING)
 	_set_attack_phase(PHASE_WINDUP, true)
+	_show_attack_telegraph()
 
 func _advance_attack(delta: float) -> void:
 	if not _attack_data:
 		_finish_attack()
 		return
 	_attack_elapsed += delta
-	var should_resolve_hit := false
 	var movement_start := global_position
 	if _attack_elapsed < _attack_data.windup:
 		if is_instance_valid(_target):
@@ -178,14 +198,14 @@ func _advance_attack(delta: float) -> void:
 	elif _attack_elapsed < _attack_data.windup + _attack_data.active:
 		if attack_phase != PHASE_ACTIVE:
 			_locked_attack_direction = _forward()
-		_set_attack_phase(PHASE_ACTIVE)
-		should_resolve_hit = true
-	else:
-		if attack_phase != PHASE_RECOVERY and _attack_data.attack_id == &"pounce":
-			velocity.x = 0.0
-			velocity.z = 0.0
-		_set_attack_phase(PHASE_RECOVERY)
-	if attack_phase == PHASE_ACTIVE and _attack_data.attack_id == &"pounce":
+			_set_attack_phase(PHASE_ACTIVE)
+	elif not _charge_crashed:
+		if attack_phase != PHASE_RECOVERY:
+			if _is_motion_attack():
+				velocity.x = 0.0
+				velocity.z = 0.0
+			_set_attack_phase(PHASE_RECOVERY)
+	if attack_phase == PHASE_ACTIVE and _is_motion_attack():
 		velocity.x = _locked_attack_direction.x * _attack_data.movement_speed
 		velocity.z = _locked_attack_direction.z * _attack_data.movement_speed
 	else:
@@ -195,25 +215,33 @@ func _advance_attack(delta: float) -> void:
 	_apply_gravity(delta)
 	move_and_slide()
 	_clamp_to_arena()
-	_animate_attack()
 	var active_elapsed := _attack_elapsed - _attack_data.windup
-	if should_resolve_hit and active_elapsed >= _attack_data.hit_delay:
-		if _attack_data.attack_id == &"pounce":
-			_resolve_pounce_hit(movement_start, global_position)
+	if attack_phase == PHASE_ACTIVE and active_elapsed >= _attack_data.hit_delay:
+		if _is_motion_attack():
+			_resolve_motion_hit(movement_start, global_position)
 		else:
 			_resolve_sweep_hit()
-	if _attack_elapsed >= _attack_data.duration():
+	if attack_phase == PHASE_ACTIVE and _attack_data.attack_id == &"charge":
+		_handle_charge_collisions()
+	_animate_attack()
+	if _attack_elapsed >= _current_attack_duration():
 		_finish_attack()
 
 func _finish_attack() -> void:
+	if _attack_data:
+		attack_cooldown_left = maxf(attack_cooldown_left, _attack_data.cooldown)
 	_attack_data = null
 	_attack_elapsed = 0.0
 	_attack_resolved = false
+	_charge_crashed = false
 	velocity.x = 0.0
 	velocity.z = 0.0
 	attack_phase = &"ready"
 	if _visuals and not is_dead:
 		_visuals.rotation = Vector3.ZERO
+		_visuals.position = Vector3.ZERO
+	_reset_attack_pose()
+	_hide_attack_telegraphs()
 	_set_state(STATE_READY)
 	_update_label()
 
@@ -221,6 +249,8 @@ func _set_attack_phase(next_phase: StringName, force_emit: bool = false) -> void
 	if attack_phase == next_phase and not force_emit:
 		return
 	attack_phase = next_phase
+	if attack_phase != PHASE_WINDUP:
+		_hide_attack_telegraphs()
 	attack_phase_changed.emit(_attack_data.display_name, attack_phase)
 	_update_label()
 
@@ -254,7 +284,7 @@ func _resolve_sweep_hit() -> void:
 				target.receive_hit(attack_token, _attack_data.damage, hit_position)
 				return
 
-func _resolve_pounce_hit(from_position: Vector3, to_position: Vector3) -> void:
+func _resolve_motion_hit(from_position: Vector3, to_position: Vector3) -> void:
 	if _attack_resolved:
 		return
 	# Sweep a physical sphere along both the body center and the leading head
@@ -267,6 +297,33 @@ func _resolve_pounce_hit(from_position: Vector3, to_position: Vector3) -> void:
 		for fraction: float in [0.0, 0.25, 0.5, 0.75, 1.0]:
 			if _probe_hunter(path_start.lerp(path_end, fraction), _attack_data.hit_radius):
 				return
+
+func _is_motion_attack() -> bool:
+	return _attack_data and _attack_data.attack_id in [&"pounce", &"charge"]
+
+func _handle_charge_collisions() -> void:
+	for collision_index in get_slide_collision_count():
+		var collision := get_slide_collision(collision_index)
+		if absf(collision.get_normal().y) >= 0.7:
+			continue
+		var collider: Object = collision.get_collider()
+		if collider and collider.has_method("break_from_charge"):
+			collider.break_from_charge(collision.get_position())
+			continue
+		_crash_charge()
+		return
+
+func _crash_charge() -> void:
+	_charge_crashed = true
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_attack_elapsed = _attack_data.windup + _attack_data.active
+	_set_attack_phase(PHASE_STUNNED)
+
+func _current_attack_duration() -> float:
+	if _charge_crashed:
+		return _attack_data.windup + _attack_data.active + CHARGE_CRASH_RECOVERY
+	return _attack_data.duration()
 
 func _probe_hunter(at: Vector3, radius: float) -> bool:
 	var sphere := SphereShape3D.new()
@@ -331,6 +388,8 @@ func _update_feedback(delta: float) -> void:
 				phase_color = Color("d19a58")
 			elif attack_phase == PHASE_ACTIVE:
 				phase_color = Color("d9574f")
+			elif attack_phase == PHASE_STUNNED:
+				phase_color = Color("536b78")
 			else:
 				phase_color = Color("617b78")
 		_body_material.albedo_color = Color("ef8e74") if _flash_time > 0.0 else phase_color
@@ -340,6 +399,9 @@ func _animate_attack() -> void:
 		return
 	if _attack_data.attack_id == &"pounce":
 		_animate_pounce()
+		return
+	if _attack_data.attack_id == &"charge":
+		_animate_charge()
 		return
 	if attack_phase == PHASE_WINDUP:
 		var progress := clampf(_attack_elapsed / _attack_data.windup, 0.0, 1.0)
@@ -359,14 +421,92 @@ func _animate_pounce() -> void:
 		var progress := clampf(_attack_elapsed / _attack_data.windup, 0.0, 1.0)
 		_visuals.rotation.x = lerpf(0.0, 0.34, _smooth(progress))
 		_visuals.position.y = lerpf(0.0, -0.16, _smooth(progress))
+		_left_foreleg.rotation.x = lerpf(0.0, 0.35, _smooth(progress))
+		_right_foreleg.rotation.x = lerpf(0.0, 0.35, _smooth(progress))
+		_left_hindleg.rotation.x = lerpf(0.0, -0.28, _smooth(progress))
+		_right_hindleg.rotation.x = lerpf(0.0, -0.28, _smooth(progress))
 	elif attack_phase == PHASE_ACTIVE:
 		var progress := clampf((_attack_elapsed - _attack_data.windup) / _attack_data.active, 0.0, 1.0)
 		_visuals.rotation.x = lerpf(0.34, -0.24, _smooth(progress))
-		_visuals.position.y = lerpf(-0.16, 0.0, _smooth(progress)) + sin(progress * PI) * 0.34
+		_visuals.position.y = lerpf(-0.16, 0.0, _smooth(progress)) + sin(progress * PI) * 0.68
+		_left_foreleg.rotation.x = lerpf(0.35, -1.05, _smooth(minf(progress * 2.5, 1.0)))
+		_right_foreleg.rotation.x = lerpf(0.35, -1.05, _smooth(minf(progress * 2.5, 1.0)))
 	else:
 		var progress := clampf((_attack_elapsed - _attack_data.windup - _attack_data.active) / _attack_data.recovery, 0.0, 1.0)
 		_visuals.rotation.x = lerpf(-0.24, 0.0, _smooth(progress))
 		_visuals.position.y = lerpf(0.0, 0.0, progress)
+		_left_foreleg.rotation.x = lerpf(-1.05, 0.0, _smooth(progress))
+		_right_foreleg.rotation.x = lerpf(-1.05, 0.0, _smooth(progress))
+		_left_hindleg.rotation.x = lerpf(-0.28, 0.0, _smooth(progress))
+		_right_hindleg.rotation.x = lerpf(-0.28, 0.0, _smooth(progress))
+
+func _animate_charge() -> void:
+	if attack_phase == PHASE_WINDUP:
+		var progress := clampf(_attack_elapsed / _attack_data.windup, 0.0, 1.0)
+		_visuals.rotation.x = lerpf(0.0, 0.46, _smooth(progress))
+		_visuals.position.y = lerpf(0.0, -0.22, _smooth(progress))
+		_visuals.position.z = lerpf(0.0, 0.34, _smooth(minf(progress / 0.72, 1.0)))
+		var scrape := sin(progress * TAU * 2.0) * 0.5 * minf(progress * 3.0, 1.0)
+		_left_foreleg.rotation.x = scrape
+		_right_foreleg.rotation.x = -scrape * 0.35
+		_set_horn_charge_glow(0.35 + progress * 1.8)
+	elif attack_phase == PHASE_ACTIVE:
+		var progress := clampf((_attack_elapsed - _attack_data.windup) / _attack_data.active, 0.0, 1.0)
+		_visuals.rotation.x = lerpf(0.46, -0.34, minf(progress * 3.0, 1.0))
+		_visuals.position.y = lerpf(-0.22, 0.0, minf(progress * 3.0, 1.0))
+		_visuals.position.z = lerpf(0.34, 0.0, minf(progress * 4.0, 1.0))
+		_left_foreleg.rotation.x = lerpf(_left_foreleg.rotation.x, -0.22, minf(progress * 4.0, 1.0))
+		_right_foreleg.rotation.x = lerpf(_right_foreleg.rotation.x, -0.22, minf(progress * 4.0, 1.0))
+		_set_horn_charge_glow(2.4)
+	elif attack_phase == PHASE_STUNNED:
+		var progress := clampf((_attack_elapsed - _attack_data.windup - _attack_data.active) / CHARGE_CRASH_RECOVERY, 0.0, 1.0)
+		var fall := _smooth(minf(progress / 0.12, 1.0))
+		var rise := _smooth(clampf((progress - 0.78) / 0.22, 0.0, 1.0))
+		_visuals.rotation.x = lerpf(-0.34, 0.0, rise)
+		_visuals.rotation.z = lerpf(0.0, 1.28, fall) * (1.0 - rise)
+		_visuals.position.y = -0.18 * fall * (1.0 - rise)
+		_visuals.position.z = 0.0
+		_set_horn_charge_glow(lerpf(1.2, 0.0, rise))
+	else:
+		var progress := clampf((_attack_elapsed - _attack_data.windup - _attack_data.active) / _attack_data.recovery, 0.0, 1.0)
+		_visuals.rotation.x = lerpf(-0.34, 0.0, _smooth(progress))
+		_visuals.position.y = 0.0
+		_visuals.position.z = 0.0
+		_left_foreleg.rotation.x = lerpf(-0.22, 0.0, _smooth(progress))
+		_right_foreleg.rotation.x = lerpf(-0.22, 0.0, _smooth(progress))
+		_set_horn_charge_glow(lerpf(2.4, 0.0, _smooth(progress)))
+
+func _set_horn_charge_glow(energy: float) -> void:
+	if not _horn_material:
+		return
+	_horn_material.emission_enabled = energy > 0.01
+	_horn_material.emission = Color("f0b75e")
+	_horn_material.emission_energy_multiplier = energy
+
+func _reset_attack_pose() -> void:
+	for leg: Node3D in [_left_foreleg, _right_foreleg, _left_hindleg, _right_hindleg]:
+		if leg:
+			leg.rotation = Vector3.ZERO
+	_set_horn_charge_glow(0.0)
+
+func _show_attack_telegraph() -> void:
+	_hide_attack_telegraphs()
+	if not _attack_data:
+		return
+	if _attack_data.attack_id == &"pounce" and _pounce_telegraph:
+		_pounce_telegraph.position.z = -_attack_data.movement_speed * _attack_data.active
+		_pounce_telegraph.show()
+	elif _attack_data.attack_id == &"charge" and _charge_telegraph:
+		var length := _attack_data.movement_speed * _attack_data.active
+		_charge_telegraph.scale.z = length
+		_charge_telegraph.position.z = -length * 0.5
+		_charge_telegraph.show()
+
+func _hide_attack_telegraphs() -> void:
+	if _pounce_telegraph:
+		_pounce_telegraph.hide()
+	if _charge_telegraph:
+		_charge_telegraph.hide()
 
 func _smooth(value: float) -> float:
 	var clamped := clampf(value, 0.0, 1.0)
@@ -400,17 +540,18 @@ func _build_placeholder() -> void:
 	add_child(_visuals)
 	_body_material = FieldGeometry.material(Color("75635a"))
 	var hide := FieldGeometry.material(Color("51463f"))
-	var horn := FieldGeometry.material(Color("d7c99f"))
+	_horn_material = FieldGeometry.material(Color("d7c99f"))
 	var warning := FieldGeometry.material(Color("c98665"), 0.28)
 	FieldGeometry.box(_visuals, Vector3(1.55, 1.05, 2.25), Vector3(0, 1.05, 0), _body_material)
 	FieldGeometry.box(_visuals, Vector3(1.25, 0.92, 0.92), Vector3(0, 1.12, -1.32), hide)
-	_left_horn = FieldGeometry.box(_visuals, Vector3(0.22, 0.22, 0.72), Vector3(-0.42, 1.38, -1.88), horn)
-	_right_horn = FieldGeometry.box(_visuals, Vector3(0.22, 0.22, 0.72), Vector3(0.42, 1.38, -1.88), horn)
+	_left_horn = FieldGeometry.box(_visuals, Vector3(0.22, 0.22, 0.72), Vector3(-0.42, 1.38, -1.88), _horn_material)
+	_right_horn = FieldGeometry.box(_visuals, Vector3(0.22, 0.22, 0.72), Vector3(0.42, 1.38, -1.88), _horn_material)
 	_left_foreleg = _leg(Vector3(-0.52, 0.48, -0.66), hide)
 	_right_foreleg = _leg(Vector3(0.52, 0.48, -0.66), hide)
 	_left_hindleg = _leg(Vector3(-0.52, 0.48, 0.68), hide)
 	_right_hindleg = _leg(Vector3(0.52, 0.48, 0.68), hide)
 	FieldGeometry.ring(self, attack_range, 0.045, Vector3(0, 0.055, 0), warning)
+	_build_attack_telegraphs()
 	_health_label = Label3D.new()
 	_health_label.position = Vector3(0, 2.2, 0)
 	_health_label.font_size = 42
@@ -418,6 +559,22 @@ func _build_placeholder() -> void:
 	_health_label.modulate = Color("eadab5")
 	_health_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	add_child(_health_label)
+
+func _build_attack_telegraphs() -> void:
+	var pounce_material := FieldGeometry.material(Color("e5c268"), 0.55)
+	pounce_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pounce_material.albedo_color.a = 0.52
+	_pounce_telegraph = Node3D.new()
+	_pounce_telegraph.name = "PounceLandingTelegraph"
+	add_child(_pounce_telegraph)
+	FieldGeometry.ring(_pounce_telegraph, 1.15, 0.11, Vector3(0, 0.02, 0), pounce_material)
+	var charge_material := FieldGeometry.material(Color("e46f45"), 0.72)
+	charge_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	charge_material.albedo_color.a = 0.42
+	_charge_telegraph = FieldGeometry.box(self, Vector3(1.7, 0.025, 1.0), Vector3.ZERO, charge_material)
+	_charge_telegraph.name = "ChargePathTelegraph"
+	_charge_telegraph.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_hide_attack_telegraphs()
 
 func _leg(at: Vector3, material: Material) -> Node3D:
 	var pivot := Node3D.new()

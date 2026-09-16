@@ -55,7 +55,7 @@ func _ready() -> void:
 	content.add_theme_constant_override("separation", 7)
 	bottom.add_child(content)
 	target_health = _label(content, "FIELD BEAST    /    180 HP", 12, ACCENT)
-	objective = _label(content, "Read the warning. Evade the sweep or pounce.", 19, INK)
+	objective = _label(content, "Read the warning. Evade sweep, pounce, or charge.", 19, INK)
 	action_label = _label(content, "READY    /    AIM, THEN CHOOSE AN ACTION", 12, MUTED)
 	var health_row := HBoxContainer.new()
 	health_row.add_theme_constant_override("separation", 12)
@@ -134,12 +134,12 @@ func _build_overlay() -> void:
 	box.add_child(start_button)
 	var reset_button := _button("Restart exercise", func(): reset_requested.emit())
 	box.add_child(reset_button)
-	_label(box, "PROTOTYPE  M3.4    /    Pounce study", 12, MUTED)
+	_label(box, "PROTOTYPE  M3.5    /    Charge study", 12, MUTED)
 
 func show_menu(first_time: bool) -> void:
 	overlay.show()
 	title.text = "A heavy blade rewards\ndeliberate hands." if first_time else "Take a breath."
-	description.text = "Amber warns of an attack. A close horn sweep twists sideways; a medium-range pounce crouches low.\nMove or roll off the locked path, then punish the blue-grey recovery." if first_time else "The field is paused. Your action is frozen in place.\nResume when you are ready to commit."
+	description.text = "Amber warns of an attack. Sweep up close, evade a pounce at medium range, or bait a long charge.\nA charge breaks wood; stone and walls knock the beast down for a long punish." if first_time else "The field is paused. Your action is frozen in place.\nResume when you are ready to commit."
 	start_button.text = "Begin blade study" if first_time else "Return to the field"
 	start_button.grab_focus()
 
@@ -159,7 +159,7 @@ func set_player_health(current: int, maximum: int) -> void:
 
 func set_target_health(current: int, maximum: int) -> void:
 	target_health.text = "FIELD BEAST    /    %d OF %d HP" % [current, maximum]
-	objective.text = "Beast down. Press R to reset the pursuit." if current <= 0 else "Read the warning. Evade the sweep or pounce."
+	objective.text = "Beast down. Press R to reset the pursuit." if current <= 0 else "Read the warning. Evade sweep, pounce, or charge."
 
 func set_action(action: String, phase: String) -> void:
 	action_label.text = "%s    /    %s" % [action.to_upper(), phase.to_upper()]

@@ -1,8 +1,10 @@
+class_name FieldArena
 extends Node3D
 
 const WAYPOINTS: Array[Vector3] = [Vector3(-8, 0, 0), Vector3(6, 0, -7), Vector3(8, 0, 6)]
 var beacons: Array[Node3D] = []
 var training_dummy: TrainingDummy
+var breakable_obstacles: Array[BreakableObstacle] = []
 
 func _ready() -> void:
 	_build_lighting()
@@ -17,6 +19,11 @@ func _ready() -> void:
 	_solid_box("SouthBoundary", Vector3(36, 0.65, 1), Vector3(0, 0.325, 14.5), wall_material)
 	_solid_box("WestBoundary", Vector3(1, 0.85, 28), Vector3(-17.5, 0.425, 0), wall_material)
 	_solid_box("EastBoundary", Vector3(1, 0.85, 28), Vector3(17.5, 0.425, 0), wall_material)
+	_solid_box("CentralMonolith", Vector3(2.4, 2.8, 2.4), Vector3(-3.0, 1.4, -1.0), FieldGeometry.material(Color("3e504c")))
+	var wood := FieldGeometry.material(Color("8a6545"))
+	_breakable_box(Vector3(-9.0, 0.0, -7.0), Vector3(2.6, 1.55, 0.7), wood)
+	_breakable_box(Vector3(10.0, 0.0, -8.0), Vector3(0.7, 1.55, 2.6), wood)
+	_breakable_box(Vector3(-11.0, 0.0, 8.5), Vector3(2.6, 1.55, 0.7), wood)
 	var stone := FieldGeometry.material(Color("51605a"))
 	var trim := FieldGeometry.material(Color("81907a"))
 	# M1 route markers remain as dim landmarks around the M2 combat lane.
@@ -71,6 +78,17 @@ func _solid_box(node_name: String, dimensions: Vector3, at: Vector3, material: M
 	collision.shape = shape
 	body.add_child(collision)
 	FieldGeometry.box(body, dimensions, Vector3.ZERO, material)
+
+func _breakable_box(at: Vector3, dimensions: Vector3, material: Material) -> void:
+	var obstacle := BreakableObstacle.new()
+	obstacle.position = at
+	add_child(obstacle)
+	obstacle.setup(dimensions, material)
+	breakable_obstacles.append(obstacle)
+
+func reset_obstacles() -> void:
+	for obstacle in breakable_obstacles:
+		obstacle.reset_obstacle()
 
 func _build_lighting() -> void:
 	var environment := Environment.new()
