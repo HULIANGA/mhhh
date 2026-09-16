@@ -16,6 +16,7 @@ const PHASE_WINDUP: StringName = &"windup"
 const PHASE_ACTIVE: StringName = &"active"
 const PHASE_RECOVERY: StringName = &"recovery"
 const SWEEP_ATTACK: MonsterAttackData = preload("res://data/monster_sweep.tres")
+const POUNCE_ATTACK: MonsterAttackData = preload("res://data/monster_pounce.tres")
 
 @export_range(1, 999) var max_health: int = 180
 @export_range(0.1, 12.0) var move_speed: float = 3.6
@@ -81,6 +82,10 @@ func _physics_process(delta: float) -> void:
 		_stop(STATE_IDLE, delta)
 		return
 	_face(offset, delta)
+	if attacks_enabled and distance_to_target >= POUNCE_ATTACK.minimum_range and distance_to_target <= POUNCE_ATTACK.maximum_range:
+		_stop(STATE_READY, delta)
+		_start_attack(POUNCE_ATTACK)
+		return
 	if distance_to_target <= attack_range:
 		_stop(STATE_READY, delta)
 		if attacks_enabled:
@@ -163,6 +168,7 @@ func _advance_attack(delta: float) -> void:
 		return
 	_attack_elapsed += delta
 	var should_resolve_hit := false
+	var movement_start := global_position
 	if _attack_elapsed < _attack_data.windup:
 		if is_instance_valid(_target):
 			var aim := _target.global_position - global_position
@@ -175,14 +181,27 @@ func _advance_attack(delta: float) -> void:
 		_set_attack_phase(PHASE_ACTIVE)
 		should_resolve_hit = true
 	else:
+		if attack_phase != PHASE_RECOVERY and _attack_data.attack_id == &"pounce":
+			velocity.x = 0.0
+			velocity.z = 0.0
 		_set_attack_phase(PHASE_RECOVERY)
+	if attack_phase == PHASE_ACTIVE and _attack_data.attack_id == &"pounce":
+		velocity.x = _locked_attack_direction.x * _attack_data.movement_speed
+		velocity.z = _locked_attack_direction.z * _attack_data.movement_speed
+	else:
+		var horizontal := Vector3(velocity.x, 0.0, velocity.z).move_toward(Vector3.ZERO, acceleration * delta)
+		velocity.x = horizontal.x
+		velocity.z = horizontal.z
 	_apply_gravity(delta)
 	move_and_slide()
 	_clamp_to_arena()
 	_animate_attack()
 	var active_elapsed := _attack_elapsed - _attack_data.windup
 	if should_resolve_hit and active_elapsed >= _attack_data.hit_delay:
-		_resolve_sweep_hit()
+		if _attack_data.attack_id == &"pounce":
+			_resolve_pounce_hit(movement_start, global_position)
+		else:
+			_resolve_sweep_hit()
 	if _attack_elapsed >= _attack_data.duration():
 		_finish_attack()
 
@@ -190,6 +209,8 @@ func _finish_attack() -> void:
 	_attack_data = null
 	_attack_elapsed = 0.0
 	_attack_resolved = false
+	velocity.x = 0.0
+	velocity.z = 0.0
 	attack_phase = &"ready"
 	if _visuals and not is_dead:
 		_visuals.rotation = Vector3.ZERO
@@ -232,6 +253,39 @@ func _resolve_sweep_hit() -> void:
 				var hit_position: Vector3 = query.transform.origin
 				target.receive_hit(attack_token, _attack_data.damage, hit_position)
 				return
+
+func _resolve_pounce_hit(from_position: Vector3, to_position: Vector3) -> void:
+	if _attack_resolved:
+		return
+	# Sweep a physical sphere along both the body center and the leading head
+	# path so a fast pounce cannot tunnel through the hunter between ticks.
+	var front_offset := _locked_attack_direction * 1.05 + Vector3.UP * 0.95
+	var center_offset := Vector3.UP * 0.85
+	for offset: Vector3 in [front_offset, center_offset]:
+		var path_start := from_position + offset
+		var path_end := to_position + offset
+		for fraction: float in [0.0, 0.25, 0.5, 0.75, 1.0]:
+			if _probe_hunter(path_start.lerp(path_end, fraction), _attack_data.hit_radius):
+				return
+
+func _probe_hunter(at: Vector3, radius: float) -> bool:
+	var sphere := SphereShape3D.new()
+	sphere.radius = radius
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = sphere
+	query.transform = Transform3D(Basis.IDENTITY, at)
+	query.collision_mask = 2
+	query.collide_with_areas = true
+	query.collide_with_bodies = true
+	query.exclude = [get_rid()]
+	for result: Dictionary in get_world_3d().direct_space_state.intersect_shape(query, 8):
+		var target: Object = result.get("collider")
+		if not target or not target.has_method("receive_hit"):
+			continue
+		_attack_resolved = true
+		target.receive_hit(attack_token, _attack_data.damage, at)
+		return true
+	return false
 
 func _forward() -> Vector3:
 	return (-global_basis.z).normalized()
@@ -284,6 +338,9 @@ func _update_feedback(delta: float) -> void:
 func _animate_attack() -> void:
 	if not _visuals or not _attack_data:
 		return
+	if _attack_data.attack_id == &"pounce":
+		_animate_pounce()
+		return
 	if attack_phase == PHASE_WINDUP:
 		var progress := clampf(_attack_elapsed / _attack_data.windup, 0.0, 1.0)
 		_visuals.rotation.y = lerpf(0.0, -0.48, _smooth(progress))
@@ -296,6 +353,20 @@ func _animate_attack() -> void:
 		var progress := clampf((_attack_elapsed - _attack_data.windup - _attack_data.active) / _attack_data.recovery, 0.0, 1.0)
 		_visuals.rotation.y = lerpf(0.78, 0.0, _smooth(progress))
 		_visuals.rotation.x = lerpf(-0.1, 0.0, _smooth(progress))
+
+func _animate_pounce() -> void:
+	if attack_phase == PHASE_WINDUP:
+		var progress := clampf(_attack_elapsed / _attack_data.windup, 0.0, 1.0)
+		_visuals.rotation.x = lerpf(0.0, 0.34, _smooth(progress))
+		_visuals.position.y = lerpf(0.0, -0.16, _smooth(progress))
+	elif attack_phase == PHASE_ACTIVE:
+		var progress := clampf((_attack_elapsed - _attack_data.windup) / _attack_data.active, 0.0, 1.0)
+		_visuals.rotation.x = lerpf(0.34, -0.24, _smooth(progress))
+		_visuals.position.y = lerpf(-0.16, 0.0, _smooth(progress)) + sin(progress * PI) * 0.34
+	else:
+		var progress := clampf((_attack_elapsed - _attack_data.windup - _attack_data.active) / _attack_data.recovery, 0.0, 1.0)
+		_visuals.rotation.x = lerpf(-0.24, 0.0, _smooth(progress))
+		_visuals.position.y = lerpf(0.0, 0.0, progress)
 
 func _smooth(value: float) -> float:
 	var clamped := clampf(value, 0.0, 1.0)
