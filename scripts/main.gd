@@ -1,8 +1,17 @@
 extends Node3D
 
+signal battle_settled(result: StringName)
+
 const HUD = preload("res://scripts/hud.gd")
+const BATTLE_WAITING: StringName = &"waiting"
+const BATTLE_RUNNING: StringName = &"running"
+const BATTLE_WON: StringName = &"won"
+const BATTLE_LOST: StringName = &"lost"
 var hud: CanvasLayer
 var started: bool = false
+var battle_state: StringName = BATTLE_WAITING
+var settlement_count: int = 0
+var _settlement_pending: bool = false
 @onready var player: Hunter = $Player
 @onready var arena: FieldArena = $Arena
 @onready var camera: Camera3D = $Camera3D
@@ -32,7 +41,9 @@ func _ready() -> void:
 	player.action_changed.connect(hud.set_action)
 	player.attack_landed.connect(_on_attack_landed)
 	player.action_denied.connect(hud.show_denied)
+	player.defeated.connect(_request_battle_settlement)
 	monster.health_changed.connect(hud.set_target_health)
+	monster.defeated.connect(_request_battle_settlement)
 	monster.add_collision_exception_with(training_dummy)
 	hud.set_player_health(player.health, player.max_health)
 	hud.set_stamina(player.stamina, player.max_stamina)
@@ -48,6 +59,8 @@ func _physics_process(_delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
+		if battle_state in [BATTLE_WON, BATTLE_LOST]:
+			return
 		if get_tree().paused:
 			resume()
 		else:
@@ -58,7 +71,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		hud.debug_label.visible = not hud.debug_label.visible
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(hud) and started:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(hud) and battle_state == BATTLE_RUNNING:
 		pause()
 
 func pause() -> void:
@@ -69,18 +82,52 @@ func pause() -> void:
 	hud.show_menu(not started)
 
 func resume() -> void:
+	if battle_state in [BATTLE_WON, BATTLE_LOST]:
+		return
 	player.clear_input()
 	started = true
+	battle_state = BATTLE_RUNNING
 	hud.hide_menu()
 	get_tree().paused = false
 
 func reset_exercise() -> void:
+	_settlement_pending = false
+	battle_state = BATTLE_RUNNING
 	player.reset()
 	training_dummy.reset_target()
 	arena.reset_obstacles()
 	monster.reset_monster()
 	camera.snap_to_target()
+	hud.hide_battle_result()
 	resume()
+
+func _request_battle_settlement() -> void:
+	if battle_state != BATTLE_RUNNING or _settlement_pending:
+		return
+	_settlement_pending = true
+	call_deferred("_settle_battle")
+
+func _settle_battle() -> void:
+	if battle_state != BATTLE_RUNNING:
+		_settlement_pending = false
+		return
+	# Settlement is deferred until the current physics frame is complete. Player
+	# defeat therefore wins the tie when both combatants receive lethal damage.
+	if player.is_defeated:
+		battle_state = BATTLE_LOST
+	elif monster.is_dead:
+		battle_state = BATTLE_WON
+	else:
+		_settlement_pending = false
+		return
+	_settlement_pending = false
+	settlement_count += 1
+	player.clear_input()
+	player.velocity = Vector3.ZERO
+	monster.velocity = Vector3.ZERO
+	get_tree().paused = true
+	hud.show_battle_result(battle_state == BATTLE_WON)
+	battle_settled.emit(battle_state)
 
 func _on_attack_landed(damage: int, _target_name: String, _world_position: Vector3) -> void:
 	hud.show_hit(damage)

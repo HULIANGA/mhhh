@@ -16,3 +16,4 @@ minimum_range = 0.0
 maximum_range = 3.2
 cooldown = 0.55
 selection_weight = 1.15
+close_weight_multiplier = 1.0

@@ -255,10 +255,7 @@ func _finish_attack() -> void:
 	_update_label()
 
 func _select_attack(distance: float) -> MonsterAttackData:
-	var candidates: Array[MonsterAttackData] = []
-	for data: MonsterAttackData in [SWEEP_ATTACK, POUNCE_ATTACK, CHARGE_ATTACK]:
-		if distance >= data.minimum_range and distance <= data.maximum_range:
-			candidates.append(data)
+	var candidates := _attack_candidates(distance)
 	if candidates.is_empty():
 		return null
 	if candidates.size() == 1:
@@ -272,16 +269,35 @@ func _select_attack(distance: float) -> MonsterAttackData:
 			candidates = alternatives
 	var total_weight := 0.0
 	for data in candidates:
-		total_weight += _selection_weight(data)
+		total_weight += _selection_weight(data, distance)
 	var roll := _decision_rng.randf() * total_weight
 	for data in candidates:
-		roll -= _selection_weight(data)
+		roll -= _selection_weight(data, distance)
 		if roll <= 0.0:
 			return data
 	return candidates.back()
 
-func _selection_weight(data: MonsterAttackData) -> float:
+func _attack_candidates(distance: float) -> Array[MonsterAttackData]:
+	var candidates: Array[MonsterAttackData] = []
+	for data: MonsterAttackData in [SWEEP_ATTACK, POUNCE_ATTACK, CHARGE_ATTACK]:
+		var in_primary_range := distance >= data.minimum_range and distance <= data.maximum_range
+		var close_fallback := distance <= attack_range and data.close_weight_multiplier > 0.0
+		if in_primary_range or close_fallback:
+			candidates.append(data)
+	return candidates
+
+func _selection_weight(data: MonsterAttackData, distance: float) -> float:
 	var weight := data.selection_weight
+	if distance < data.minimum_range:
+		weight *= data.close_weight_multiplier
+	# The pounce/charge transition is distance-shaped rather than a flat coin
+	# flip: pounce dominates its near edge, charge dominates its far edge.
+	if distance >= CHARGE_ATTACK.minimum_range and distance <= POUNCE_ATTACK.maximum_range:
+		var transition := inverse_lerp(CHARGE_ATTACK.minimum_range, POUNCE_ATTACK.maximum_range, distance)
+		if data.attack_id == &"pounce":
+			weight *= lerpf(1.45, 0.16, transition)
+		elif data.attack_id == &"charge":
+			weight *= lerpf(0.22, 1.75, transition)
 	if data.attack_id == last_attack_id:
 		weight *= 0.32
 	return weight

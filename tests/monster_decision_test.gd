@@ -27,10 +27,18 @@ func _run() -> void:
 	hunter.input_source = source
 	game.resume()
 
-	_expect(monster._select_attack(2.2) == FieldMonster.SWEEP_ATTACK, "Close distance has an unambiguous sweep choice")
+	monster.set_decision_seed(1407)
+	var close_sequence := _selection_sequence(2.2, 30)
+	_expect(close_sequence.count(&"sweep") > close_sequence.count(&"pounce") and close_sequence.count(&"pounce") > 0 and close_sequence.count(&"charge") > 0, "Close distance favors sweep while retaining lower-probability pounce and charge choices")
 	_expect(monster._select_attack(5.0) == FieldMonster.POUNCE_ATTACK, "Medium distance has an unambiguous pounce choice")
 	_expect(monster._select_attack(12.0) == FieldMonster.CHARGE_ATTACK, "Far distance has an unambiguous charge choice")
+	_expect(monster._select_attack(14.0) == null, "Very far distance has no immediate attack so the monster must approach first")
 	_expect(_candidate_count(2.9) == 2 and _candidate_count(7.5) == 2, "Distance transitions expose weighted two-attack choices")
+	monster.set_decision_seed(8112)
+	var near_transition := _selection_sequence(7.05, 60)
+	monster.set_decision_seed(8112)
+	var far_transition := _selection_sequence(8.55, 60)
+	_expect(near_transition.count(&"pounce") > near_transition.count(&"charge") and far_transition.count(&"charge") > far_transition.count(&"pounce"), "Transition weights shift from pounce to charge as distance increases")
 
 	monster.last_attack_id = &""
 	monster.consecutive_attack_count = 0
@@ -41,24 +49,34 @@ func _run() -> void:
 	_expect(first_sequence == repeated_sequence, "The same decision seed reproduces the same weighted attack sequence")
 	_expect(first_sequence.has(&"pounce") and first_sequence.has(&"charge"), "Weighted transition selection can produce both eligible attacks")
 
+	_prepare_far_encounter()
+	await _frames(3)
+	var initial_distance := monster.distance_to_target
+	_expect(monster.state == FieldMonster.STATE_CHASING, "A very distant hunter makes the monster chase instead of attacking in place")
+	await _until_attacking(360)
+	_expect(monster.distance_to_target < initial_distance - 4.0 and monster.distance_to_target <= FieldMonster.CHARGE_ATTACK.maximum_range + 0.2 and monster._attack_data == FieldMonster.CHARGE_ATTACK, "Monster closes to charge range before committing to the far attack")
+
 	monster.last_attack_id = &"pounce"
 	monster.consecutive_attack_count = monster.maximum_consecutive_attack
 	_expect(monster._select_attack(7.5) == FieldMonster.CHARGE_ATTACK, "Two consecutive pounces force the available charge alternative")
 	monster.last_attack_id = &"charge"
 	monster.consecutive_attack_count = monster.maximum_consecutive_attack
 	_expect(monster._select_attack(7.5) == FieldMonster.POUNCE_ATTACK, "Two consecutive charges force the available pounce alternative")
+	monster.last_attack_id = &"sweep"
+	monster.consecutive_attack_count = monster.maximum_consecutive_attack
+	_expect(monster._select_attack(2.2) != FieldMonster.SWEEP_ATTACK, "Two consecutive close sweeps force a pounce or charge alternative")
 
 	_prepare_close_encounter()
 	monster.last_attack_id = &"sweep"
 	monster.consecutive_attack_count = 1
-	await _until_attacking()
+	monster._start_attack(FieldMonster.SWEEP_ATTACK)
 	_expect(monster._attack_data == FieldMonster.SWEEP_ATTACK and monster.consecutive_attack_count == 2, "Actual attack startup records the consecutive choice")
 	await _until_not_attacking()
 	_expect(monster.attack_cooldown_left > FieldMonster.SWEEP_ATTACK.cooldown * 1.5, "Repeated attacks receive an extended cooldown")
 	await _frames(24)
 	_expect(monster.state != FieldMonster.STATE_ATTACKING, "Extended repeat cooldown leaves a reliable close-range counter window")
 	await _until_attacking()
-	_expect(monster._attack_data == FieldMonster.SWEEP_ATTACK, "Monster resumes attacking after the counter window instead of remaining inactive")
+	_expect(monster._attack_data != null, "Monster resumes with an eligible close-range attack instead of remaining inactive")
 
 	game.reset_exercise()
 	_expect(monster.last_attack_id == &"" and monster.consecutive_attack_count == 0, "Reset clears attack history and restarts the decision sequence")
@@ -70,11 +88,7 @@ func _run() -> void:
 	quit(0 if failures == 0 else 1)
 
 func _candidate_count(distance: float) -> int:
-	var count := 0
-	for data: MonsterAttackData in [FieldMonster.SWEEP_ATTACK, FieldMonster.POUNCE_ATTACK, FieldMonster.CHARGE_ATTACK]:
-		if distance >= data.minimum_range and distance <= data.maximum_range:
-			count += 1
-	return count
+	return monster._attack_candidates(distance).size()
 
 func _selection_sequence(distance: float, count: int) -> Array[StringName]:
 	var result: Array[StringName] = []
@@ -89,6 +103,15 @@ func _prepare_close_encounter() -> void:
 	monster.rotation = Vector3.ZERO
 	monster.velocity = Vector3.ZERO
 	hunter.position = Vector3(5, 0.05, 1.8)
+	hunter.velocity = Vector3.ZERO
+
+func _prepare_far_encounter() -> void:
+	game.reset_exercise()
+	monster.attacks_enabled = true
+	monster.position = Vector3(5, 0.05, 10)
+	monster.rotation = Vector3.ZERO
+	monster.velocity = Vector3.ZERO
+	hunter.position = Vector3(5, 0.05, -8)
 	hunter.velocity = Vector3.ZERO
 
 func _until_attacking(maximum_frames: int = 240) -> void:

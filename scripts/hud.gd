@@ -12,6 +12,7 @@ var overlay: ColorRect
 var title: Label
 var description: Label
 var start_button: Button
+var reset_button: Button
 var objective: Label
 var target_health: Label
 var action_label: Label
@@ -132,12 +133,14 @@ func _build_overlay() -> void:
 	start_button = _button("Begin blade study", func(): continue_requested.emit())
 	start_button.custom_minimum_size = Vector2(0, 54)
 	box.add_child(start_button)
-	var reset_button := _button("Restart exercise", func(): reset_requested.emit())
+	reset_button = _button("Restart exercise", func(): reset_requested.emit())
 	box.add_child(reset_button)
-	_label(box, "PROTOTYPE  M3.6    /    Combat rhythm study", 12, MUTED)
+	_label(box, "PROTOTYPE  M3.7    /    Hunt settlement study", 12, MUTED)
 
 func show_menu(first_time: bool) -> void:
 	overlay.show()
+	start_button.show()
+	reset_button.text = "Restart exercise"
 	title.text = "A heavy blade rewards\ndeliberate hands." if first_time else "Take a breath."
 	description.text = "Amber warns of an attack. Sweep up close, evade a pounce at medium range, or bait a long charge.\nA charge breaks wood; stone and walls knock the beast down for a long punish." if first_time else "The field is paused. Your action is frozen in place.\nResume when you are ready to commit."
 	start_button.text = "Begin blade study" if first_time else "Return to the field"
@@ -145,7 +148,23 @@ func show_menu(first_time: bool) -> void:
 
 func hide_menu() -> void:
 	overlay.hide()
+	start_button.show()
 	start_button.release_focus()
+
+func show_battle_result(won: bool) -> void:
+	overlay.show()
+	start_button.hide()
+	title.text = "Hunt complete." if won else "The hunter has fallen."
+	description.text = "The field beast is down. Read the fight, then begin another hunt." if won else "The beast claimed this round. Reset, read the warning, and try again."
+	reset_button.text = "Start another hunt"
+	reset_button.grab_focus()
+	objective.text = "VICTORY  /  PRESS R TO HUNT AGAIN" if won else "DEFEAT  /  PRESS R TO TRY AGAIN"
+	action_label.text = "SETTLED    /    COMBAT FROZEN"
+
+func hide_battle_result() -> void:
+	start_button.show()
+	reset_button.text = "Restart exercise"
+	overlay.hide()
 
 func set_stamina(current: float, maximum: float) -> void:
 	stamina_bar.max_value = maximum
