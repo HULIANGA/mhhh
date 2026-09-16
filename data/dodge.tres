@@ -11,3 +11,4 @@ recovery = 0.2
 damage = 0
 stamina_cost = 24.0
 movement_scale = 0.0
+invulnerability = 0.32

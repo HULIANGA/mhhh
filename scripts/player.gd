@@ -31,6 +31,7 @@ const POSE_STRAIGHT_DOWN := Vector3(0.0, -0.58, -0.82)
 const POSE_CHARGE_BACK := Vector3(0.0, 0.42, 0.91)
 const CHARGE_STRIKE_APEX := 0.34
 const CHARGE_CANCEL_DURATION := 0.22
+const HIT_FEEDBACK_DURATION := 0.24
 const BLADE_TOP_RIGHT_TILT := deg_to_rad(10.0)
 const BLADE_TOP_LEFT_TILT := deg_to_rad(-10.0)
 
@@ -72,6 +73,10 @@ var _resolved_incoming_attacks: Dictionary = {}
 var _dodge_direction := Vector3.ZERO
 var _stamina_delay_left: float = 0.0
 var _walk_time: float = 0.0
+var _hit_feedback_time: float = 0.0
+var _hit_recoil_direction := Vector3.ZERO
+var _feedback_materials: Array[StandardMaterial3D] = []
+var _feedback_base_colors: Array[Color] = []
 var _left_leg: MeshInstance3D
 var _right_leg: MeshInstance3D
 var _sword: Node3D
@@ -88,6 +93,7 @@ func _ready() -> void:
 	action_changed.emit("Ready", "Aim, then choose an action")
 
 func _physics_process(delta: float) -> void:
+	_update_hit_feedback(delta)
 	if is_defeated:
 		velocity = Vector3.ZERO
 		return
@@ -158,7 +164,7 @@ func _advance_action(delta: float) -> void:
 		return
 	_action_elapsed += delta
 	if action_state == STATE_DODGING:
-		is_invulnerable = _action_elapsed <= DODGE_ACTION.active
+		is_invulnerable = _action_elapsed <= DODGE_ACTION.invulnerability
 		_set_phase(&"invulnerable" if is_invulnerable else &"recovery")
 		if _action_elapsed >= DODGE_ACTION.duration():
 			_finish_or_start_queued_charge()
@@ -353,6 +359,7 @@ func receive_hit(attack_token: int, damage: int, hit_position: Vector3) -> bool:
 	health = maxi(health - damage, 0)
 	health_changed.emit(health, max_health)
 	hit_received.emit(applied_damage, hit_position)
+	_start_hit_feedback(hit_position)
 	if health <= 0:
 		_enter_defeated_state()
 	return true
@@ -433,6 +440,9 @@ func reset() -> void:
 	health = max_health
 	stamina = max_stamina
 	_resolved_incoming_attacks.clear()
+	_hit_feedback_time = 0.0
+	_hit_recoil_direction = Vector3.ZERO
+	_restore_feedback_materials()
 	_stamina_delay_left = 0.0
 	_finish_action()
 	health_changed.emit(health, max_health)
@@ -445,6 +455,38 @@ func _animate_walk(delta: float) -> void:
 	_left_leg.rotation.x = swing
 	_right_leg.rotation.x = -swing
 	visuals.position.y = absf(sin(_walk_time)) * 0.045 * minf(speed / move_speed, 1.0)
+
+func _start_hit_feedback(hit_position: Vector3) -> void:
+	_hit_feedback_time = HIT_FEEDBACK_DURATION
+	_hit_recoil_direction = global_position - hit_position
+	_hit_recoil_direction.y = 0.0
+	if _hit_recoil_direction.length_squared() <= 0.0001:
+		_hit_recoil_direction = -_forward()
+	else:
+		_hit_recoil_direction = _hit_recoil_direction.normalized()
+
+func _update_hit_feedback(delta: float) -> void:
+	if _hit_feedback_time <= 0.0:
+		return
+	_hit_feedback_time = maxf(_hit_feedback_time - delta, 0.0)
+	var elapsed := HIT_FEEDBACK_DURATION - _hit_feedback_time
+	var pulse := sin(clampf(elapsed / HIT_FEEDBACK_DURATION, 0.0, 1.0) * PI)
+	for material in _feedback_materials:
+		material.albedo_color = Color("f06f68").lerp(Color("fff0dc"), pulse * 0.35)
+	if not is_defeated:
+		visuals.position.x = _hit_recoil_direction.x * 0.16 * pulse
+		visuals.position.z = _hit_recoil_direction.z * 0.16 * pulse
+		visuals.rotation.z = sin(elapsed * 58.0) * 0.11 * pulse
+	if _hit_feedback_time <= 0.0:
+		_restore_feedback_materials()
+		if not is_defeated:
+			visuals.position.x = 0.0
+			visuals.position.z = 0.0
+			visuals.rotation.z = 0.0
+
+func _restore_feedback_materials() -> void:
+	for index in range(mini(_feedback_materials.size(), _feedback_base_colors.size())):
+		_feedback_materials[index].albedo_color = _feedback_base_colors[index]
 
 func _animate_action() -> void:
 	if not _sword:
@@ -650,6 +692,10 @@ func _build_placeholder() -> void:
 	var leather := FieldGeometry.material(Color("665645"))
 	var steel := FieldGeometry.material(Color("bdd0c8"))
 	var gold := FieldGeometry.material(Color("deb778"))
+	_feedback_materials = [cloth, dark, leather, steel]
+	_feedback_base_colors.clear()
+	for material in _feedback_materials:
+		_feedback_base_colors.append(material.albedo_color)
 	_left_leg = FieldGeometry.box(visuals, Vector3(0.23, 0.56, 0.26), Vector3(-0.19, 0.30, 0), dark)
 	_right_leg = FieldGeometry.box(visuals, Vector3(0.23, 0.56, 0.26), Vector3(0.19, 0.30, 0), dark)
 	FieldGeometry.box(visuals, Vector3(0.66, 0.65, 0.4), Vector3(0, 0.90, 0), cloth)

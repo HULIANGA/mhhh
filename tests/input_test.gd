@@ -17,6 +17,7 @@ func _initialize() -> void:
 func _run() -> void:
 	var game: Node3D = load("res://scenes/main.tscn").instantiate()
 	root.add_child(game)
+	game.monster.attacks_enabled = false
 	current_scene = game
 	var hunter: Hunter = game.get_node("Player")
 	var keyboard: HunterInputSource = hunter.input_source

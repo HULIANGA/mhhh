@@ -22,6 +22,7 @@ func _run() -> void:
 	root.add_child(game)
 	current_scene = game
 	hunter = game.get_node("Player")
+	game.monster.attacks_enabled = false
 	target = game.get_node("Arena/TrainingDummy")
 	source = TestInputSource.new()
 	hunter.add_child(source)
@@ -194,8 +195,10 @@ func _run() -> void:
 	_expect(hunter.action_state == Hunter.STATE_DODGING and hunter.is_invulnerable, "Dodge starts with an invulnerable window")
 	_expect(absf(hunter.stamina - 76.0) < 0.1, "Dodge spends stamina once at startup")
 	await _frames(18)
-	_expect(hunter.action_state == Hunter.STATE_DODGING and not hunter.is_invulnerable, "Dodge recovery is no longer invulnerable")
-	await _frames(20)
+	_expect(hunter.action_state == Hunter.STATE_DODGING and hunter.is_invulnerable, "Extended invulnerability overlaps the beginning of dodge recovery")
+	await _frames(4)
+	_expect(hunter.action_state == Hunter.STATE_DODGING and not hunter.is_invulnerable, "Late dodge recovery is no longer invulnerable")
+	await _frames(16)
 	_expect(hunter.action_state == Hunter.STATE_FREE, "Dodge recovery returns to ready")
 
 	game.reset_exercise()

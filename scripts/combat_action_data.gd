@@ -12,6 +12,7 @@ extends Resource
 @export_range(0.1, 3.0) var hit_radius: float = 0.8
 @export_range(0.0, 1.0) var movement_scale: float = 0.15
 @export_range(0.0, 5.0) var charge_threshold: float = 0.0
+@export_range(0.0, 2.0) var invulnerability: float = 0.0
 
 func duration() -> float:
 	return windup + active + recovery

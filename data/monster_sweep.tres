@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="MonsterAttackData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/monster_attack_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Horn sweep"
+windup = 0.72
+active = 0.22
+recovery = 0.9
+damage = 24
+hit_radius = 0.42
+hit_delay = 0.07

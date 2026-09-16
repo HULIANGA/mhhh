@@ -24,6 +24,7 @@ func _run() -> void:
 	current_scene = game
 	hunter = game.get_node("Player")
 	monster = game.get_node("FieldMonster")
+	monster.attacks_enabled = false
 	source = TestInputSource.new()
 	hunter.add_child(source)
 	hunter.input_source = source

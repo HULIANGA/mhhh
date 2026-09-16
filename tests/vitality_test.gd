@@ -22,6 +22,7 @@ func _run() -> void:
 	root.add_child(game)
 	current_scene = game
 	hunter = game.get_node("Player")
+	game.monster.attacks_enabled = false
 	source = TestInputSource.new()
 	hunter.add_child(source)
 	hunter.input_source = source
@@ -44,7 +45,9 @@ func _run() -> void:
 	_expect(hunter.is_invulnerable, "Dodge enters its invulnerability window before incoming damage")
 	_expect(not hunter.receive_hit(7002, 40, hunter.global_position) and hunter.health == hunter.max_health, "Dodge invulnerability rejects incoming damage")
 	await _frames(18)
-	_expect(not hunter.is_invulnerable, "Dodge eventually leaves its invulnerability window")
+	_expect(hunter.is_invulnerable, "Extended dodge invulnerability remains active after movement begins recovering")
+	await _frames(3)
+	_expect(not hunter.is_invulnerable, "Dodge eventually leaves its extended invulnerability window")
 	_expect(not hunter.receive_hit(7002, 40, hunter.global_position) and hunter.health == hunter.max_health, "An attack dodged during invulnerability cannot hit later with the same token")
 	_expect(hunter.receive_hit(7003, 20, hunter.global_position) and hunter.health == 80, "A different attack can hit after invulnerability ends")
 

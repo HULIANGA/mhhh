@@ -5,11 +5,17 @@ signal health_changed(current: int, maximum: int)
 signal hit_received(damage: int, world_position: Vector3)
 signal defeated
 signal state_changed(state: StringName)
+signal attack_phase_changed(attack_name: String, phase: StringName)
 
 const STATE_IDLE: StringName = &"idle"
 const STATE_CHASING: StringName = &"chasing"
 const STATE_READY: StringName = &"ready"
+const STATE_ATTACKING: StringName = &"attacking"
 const STATE_DEAD: StringName = &"dead"
+const PHASE_WINDUP: StringName = &"windup"
+const PHASE_ACTIVE: StringName = &"active"
+const PHASE_RECOVERY: StringName = &"recovery"
+const SWEEP_ATTACK: MonsterAttackData = preload("res://data/monster_sweep.tres")
 
 @export_range(1, 999) var max_health: int = 180
 @export_range(0.1, 12.0) var move_speed: float = 3.6
@@ -20,16 +26,23 @@ const STATE_DEAD: StringName = &"dead"
 @export var target_path: NodePath = NodePath("../Player")
 @export var arena_min := Vector2(-16.65, -13.65)
 @export var arena_max := Vector2(16.65, 13.65)
+@export var attacks_enabled: bool = true
 
 var health: int = 180
 var state: StringName = STATE_IDLE
 var is_dead: bool = false
 var distance_to_target: float = INF
+var attack_phase: StringName = &"ready"
+var attack_token: int = 0
 var _target: Hunter
 var _spawn_transform: Transform3D
 var _resolved_attacks: Dictionary = {}
 var _flash_time: float = 0.0
 var _walk_time: float = 0.0
+var _attack_data: MonsterAttackData
+var _attack_elapsed: float = 0.0
+var _locked_attack_direction := Vector3.FORWARD
+var _attack_resolved: bool = false
 var _body_material: StandardMaterial3D
 var _visuals: Node3D
 var _health_label: Label3D
@@ -37,6 +50,8 @@ var _left_foreleg: Node3D
 var _right_foreleg: Node3D
 var _left_hindleg: Node3D
 var _right_hindleg: Node3D
+var _left_horn: MeshInstance3D
+var _right_horn: MeshInstance3D
 
 func _ready() -> void:
 	name = "FieldMonster"
@@ -50,6 +65,9 @@ func _physics_process(delta: float) -> void:
 	_update_feedback(delta)
 	if is_dead:
 		velocity = Vector3.ZERO
+		return
+	if state == STATE_ATTACKING:
+		_advance_attack(delta)
 		return
 	if not is_instance_valid(_target):
 		_target = get_node_or_null(target_path) as Hunter
@@ -65,6 +83,8 @@ func _physics_process(delta: float) -> void:
 	_face(offset, delta)
 	if distance_to_target <= attack_range:
 		_stop(STATE_READY, delta)
+		if attacks_enabled:
+			_start_attack(SWEEP_ATTACK)
 		return
 	_set_state(STATE_CHASING)
 	var desired := offset.normalized() * move_speed
@@ -99,6 +119,11 @@ func reset_monster() -> void:
 	_resolved_attacks.clear()
 	_flash_time = 0.0
 	_walk_time = 0.0
+	_attack_data = null
+	_attack_elapsed = 0.0
+	attack_phase = &"ready"
+	attack_token = 0
+	_attack_resolved = false
 	if _visuals:
 		_visuals.rotation = Vector3.ZERO
 		_visuals.position = Vector3.ZERO
@@ -114,10 +139,102 @@ func _die() -> void:
 		return
 	is_dead = true
 	velocity = Vector3.ZERO
+	_attack_data = null
+	attack_phase = &"ready"
 	_set_state(STATE_DEAD)
 	if _visuals:
 		_visuals.rotation.z = deg_to_rad(78.0)
+	_update_label()
 	defeated.emit()
+
+func _start_attack(data: MonsterAttackData) -> void:
+	_attack_data = data
+	_attack_elapsed = 0.0
+	_attack_resolved = false
+	attack_token += 1
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_set_state(STATE_ATTACKING)
+	_set_attack_phase(PHASE_WINDUP, true)
+
+func _advance_attack(delta: float) -> void:
+	if not _attack_data:
+		_finish_attack()
+		return
+	_attack_elapsed += delta
+	var should_resolve_hit := false
+	if _attack_elapsed < _attack_data.windup:
+		if is_instance_valid(_target):
+			var aim := _target.global_position - global_position
+			aim.y = 0.0
+			_face(aim, delta)
+		_set_attack_phase(PHASE_WINDUP)
+	elif _attack_elapsed < _attack_data.windup + _attack_data.active:
+		if attack_phase != PHASE_ACTIVE:
+			_locked_attack_direction = _forward()
+		_set_attack_phase(PHASE_ACTIVE)
+		should_resolve_hit = true
+	else:
+		_set_attack_phase(PHASE_RECOVERY)
+	_apply_gravity(delta)
+	move_and_slide()
+	_clamp_to_arena()
+	_animate_attack()
+	var active_elapsed := _attack_elapsed - _attack_data.windup
+	if should_resolve_hit and active_elapsed >= _attack_data.hit_delay:
+		_resolve_sweep_hit()
+	if _attack_elapsed >= _attack_data.duration():
+		_finish_attack()
+
+func _finish_attack() -> void:
+	_attack_data = null
+	_attack_elapsed = 0.0
+	_attack_resolved = false
+	attack_phase = &"ready"
+	if _visuals and not is_dead:
+		_visuals.rotation = Vector3.ZERO
+	_set_state(STATE_READY)
+	_update_label()
+
+func _set_attack_phase(next_phase: StringName, force_emit: bool = false) -> void:
+	if attack_phase == next_phase and not force_emit:
+		return
+	attack_phase = next_phase
+	attack_phase_changed.emit(_attack_data.display_name, attack_phase)
+	_update_label()
+
+func _resolve_sweep_hit() -> void:
+	if _attack_resolved:
+		return
+	# Match the active hit volume to the rendered horns. As with the hunter's
+	# blade, overlapping probes cover each segment from its root to its tip and
+	# move with the animated model on every active physics tick.
+	var sphere := SphereShape3D.new()
+	sphere.radius = _attack_data.hit_radius
+	for horn: MeshInstance3D in [_left_horn, _right_horn]:
+		var horn_root := horn.to_global(Vector3(0.0, 0.0, 0.32))
+		var horn_tip := horn.to_global(Vector3(0.0, 0.0, -0.42))
+		for fraction: float in [0.18, 0.42, 0.68, 0.9, 1.0]:
+			var query := PhysicsShapeQueryParameters3D.new()
+			query.shape = sphere
+			query.transform = Transform3D(Basis.IDENTITY, horn_root.lerp(horn_tip, fraction))
+			query.collision_mask = 2
+			query.collide_with_areas = true
+			query.collide_with_bodies = true
+			query.exclude = [get_rid()]
+			for result: Dictionary in get_world_3d().direct_space_state.intersect_shape(query, 8):
+				var target: Object = result.get("collider")
+				if not target or not target.has_method("receive_hit"):
+					continue
+				# Resolve the active attack even when the hunter is invulnerable. The
+				# same sweep must not become a delayed hit after a successful dodge.
+				_attack_resolved = true
+				var hit_position: Vector3 = query.transform.origin
+				target.receive_hit(attack_token, _attack_data.damage, hit_position)
+				return
+
+func _forward() -> Vector3:
+	return (-global_basis.z).normalized()
 
 func _stop(next_state: StringName, delta: float) -> void:
 	_set_state(next_state)
@@ -154,7 +271,35 @@ func _set_state(next_state: StringName, force_emit: bool = false) -> void:
 func _update_feedback(delta: float) -> void:
 	_flash_time = maxf(_flash_time - delta, 0.0)
 	if _body_material:
-		_body_material.albedo_color = Color("ef8e74") if _flash_time > 0.0 else Color("75635a")
+		var phase_color := Color("75635a")
+		if state == STATE_ATTACKING:
+			if attack_phase == PHASE_WINDUP:
+				phase_color = Color("d19a58")
+			elif attack_phase == PHASE_ACTIVE:
+				phase_color = Color("d9574f")
+			else:
+				phase_color = Color("617b78")
+		_body_material.albedo_color = Color("ef8e74") if _flash_time > 0.0 else phase_color
+
+func _animate_attack() -> void:
+	if not _visuals or not _attack_data:
+		return
+	if attack_phase == PHASE_WINDUP:
+		var progress := clampf(_attack_elapsed / _attack_data.windup, 0.0, 1.0)
+		_visuals.rotation.y = lerpf(0.0, -0.48, _smooth(progress))
+		_visuals.rotation.x = lerpf(0.0, 0.16, _smooth(progress))
+	elif attack_phase == PHASE_ACTIVE:
+		var progress := clampf((_attack_elapsed - _attack_data.windup) / _attack_data.active, 0.0, 1.0)
+		_visuals.rotation.y = lerpf(-0.48, 0.78, _smooth(progress))
+		_visuals.rotation.x = lerpf(0.16, -0.1, _smooth(progress))
+	else:
+		var progress := clampf((_attack_elapsed - _attack_data.windup - _attack_data.active) / _attack_data.recovery, 0.0, 1.0)
+		_visuals.rotation.y = lerpf(0.78, 0.0, _smooth(progress))
+		_visuals.rotation.x = lerpf(-0.1, 0.0, _smooth(progress))
+
+func _smooth(value: float) -> float:
+	var clamped := clampf(value, 0.0, 1.0)
+	return clamped * clamped * (3.0 - 2.0 * clamped)
 
 func _animate_walk(delta: float) -> void:
 	if not _visuals or is_dead:
@@ -171,7 +316,12 @@ func _animate_walk(delta: float) -> void:
 func _update_label() -> void:
 	if not _health_label:
 		return
-	_health_label.text = "FIELD BEAST\n%d / %d" % [health, max_health] if health > 0 else "FIELD BEAST\nDOWN — R TO RESET"
+	if health <= 0:
+		_health_label.text = "FIELD BEAST\nDOWN — R TO RESET"
+	elif state == STATE_ATTACKING and _attack_data:
+		_health_label.text = "FIELD BEAST  /  %d / %d\n%s — %s" % [health, max_health, _attack_data.display_name.to_upper(), String(attack_phase).to_upper()]
+	else:
+		_health_label.text = "FIELD BEAST\n%d / %d" % [health, max_health]
 
 func _build_placeholder() -> void:
 	_visuals = Node3D.new()
@@ -183,8 +333,8 @@ func _build_placeholder() -> void:
 	var warning := FieldGeometry.material(Color("c98665"), 0.28)
 	FieldGeometry.box(_visuals, Vector3(1.55, 1.05, 2.25), Vector3(0, 1.05, 0), _body_material)
 	FieldGeometry.box(_visuals, Vector3(1.25, 0.92, 0.92), Vector3(0, 1.12, -1.32), hide)
-	FieldGeometry.box(_visuals, Vector3(0.22, 0.22, 0.72), Vector3(-0.42, 1.38, -1.88), horn)
-	FieldGeometry.box(_visuals, Vector3(0.22, 0.22, 0.72), Vector3(0.42, 1.38, -1.88), horn)
+	_left_horn = FieldGeometry.box(_visuals, Vector3(0.22, 0.22, 0.72), Vector3(-0.42, 1.38, -1.88), horn)
+	_right_horn = FieldGeometry.box(_visuals, Vector3(0.22, 0.22, 0.72), Vector3(0.42, 1.38, -1.88), horn)
 	_left_foreleg = _leg(Vector3(-0.52, 0.48, -0.66), hide)
 	_right_foreleg = _leg(Vector3(0.52, 0.48, -0.66), hide)
 	_left_hindleg = _leg(Vector3(-0.52, 0.48, 0.68), hide)

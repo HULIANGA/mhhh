@@ -13,6 +13,7 @@ func _run() -> void:
 	root.add_child(game)
 	current_scene = game
 	hunter = game.get_node("Player")
+	game.monster.attacks_enabled = false
 	_expect(paused, "The field waits for explicit start")
 	game.resume()
 	await _frames(12)
