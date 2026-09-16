@@ -66,6 +66,11 @@ var _left_hindleg: Node3D
 var _right_hindleg: Node3D
 var _left_horn: MeshInstance3D
 var _right_horn: MeshInstance3D
+var _presentation: MonsterPresentation
+var _left_horn_base: Node3D
+var _left_horn_tip: Node3D
+var _right_horn_base: Node3D
+var _right_horn_tip: Node3D
 
 func _ready() -> void:
 	name = "FieldMonster"
@@ -73,6 +78,12 @@ func _ready() -> void:
 	_spawn_transform = global_transform
 	_target = get_node_or_null(target_path) as Hunter
 	_build_placeholder()
+	_presentation = $Presentation as MonsterPresentation
+	_presentation.bind_placeholder(_visuals, _left_horn, _right_horn)
+	_left_horn_base = _presentation.left_horn_base
+	_left_horn_tip = _presentation.left_horn_tip
+	_right_horn_base = _presentation.right_horn_base
+	_right_horn_tip = _presentation.right_horn_tip
 	reset_monster()
 
 func _physics_process(delta: float) -> void:
@@ -323,9 +334,9 @@ func _resolve_sweep_hit() -> void:
 	# move with the animated model on every active physics tick.
 	var sphere := SphereShape3D.new()
 	sphere.radius = _attack_data.hit_radius
-	for horn: MeshInstance3D in [_left_horn, _right_horn]:
-		var horn_root := horn.to_global(Vector3(0.0, 0.0, 0.32))
-		var horn_tip := horn.to_global(Vector3(0.0, 0.0, -0.42))
+	for segment in [[_left_horn_base, _left_horn_tip], [_right_horn_base, _right_horn_tip]]:
+		var horn_root: Vector3 = segment[0].global_position
+		var horn_tip: Vector3 = segment[1].global_position
 		for fraction: float in [0.18, 0.42, 0.68, 0.9, 1.0]:
 			var query := PhysicsShapeQueryParameters3D.new()
 			query.shape = sphere

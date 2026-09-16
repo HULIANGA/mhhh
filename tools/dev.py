@@ -185,6 +185,7 @@ def main():
     if args.command == "test":
         validate_art_assets()
         run("--script", "res://tests/art_asset_test.gd")
+        run("--script", "res://tests/presentation_test.gd")
         run("--script", "res://tests/input_test.gd")
         run("--script", "res://tests/movement_test.gd")
         run("--script", "res://tests/combat_test.gd")

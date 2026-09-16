@@ -80,6 +80,9 @@ var _feedback_base_colors: Array[Color] = []
 var _left_leg: MeshInstance3D
 var _right_leg: MeshInstance3D
 var _sword: Node3D
+var _presentation: HunterPresentation
+var _blade_base: Node3D
+var _blade_tip: Node3D
 var _sword_rest_position := Vector3(0.48, 0.92, -0.26)
 @onready var visuals: Node3D = $Visuals
 @onready var input_source: HunterInputSource = $InputSource
@@ -88,6 +91,10 @@ func _ready() -> void:
 	health = max_health
 	stamina = max_stamina
 	_build_placeholder()
+	_presentation = $Presentation as HunterPresentation
+	_presentation.bind_placeholder(visuals, _sword)
+	_blade_base = _presentation.blade_base
+	_blade_tip = _presentation.blade_tip
 	health_changed.emit(health, max_health)
 	stamina_changed.emit(stamina, max_stamina)
 	action_changed.emit("Ready", "Aim, then choose an action")
@@ -325,9 +332,8 @@ func _resolve_attack_hit() -> void:
 	# Match the active hit volume to the rendered blade instead of placing one
 	# fixed sphere in front of the hunter. Multiple overlapping probes cover the
 	# segment from just above the guard to the sword tip as it moves each tick.
-	var grip_position := _sword.global_position
-	var blade_length := minf(1.82, _action_data.hit_reach + 0.3)
-	var blade_tip := _sword.to_global(Vector3(0.0, blade_length, 0.0))
+	var grip_position := _blade_base.global_position
+	var blade_tip := _blade_tip.global_position
 	var sphere := SphereShape3D.new()
 	sphere.radius = clampf(_action_data.hit_radius * 0.52, 0.38, 0.58)
 	for fraction: float in [0.32, 0.55, 0.78, 1.0]:
