@@ -31,6 +31,8 @@ const CHARGE_ATTACK: MonsterAttackData = preload("res://data/monster_charge.tres
 @export var arena_min := Vector2(-16.65, -13.65)
 @export var arena_max := Vector2(16.65, 13.65)
 @export var attacks_enabled: bool = true
+@export var decision_seed: int = 316031
+@export_range(1, 4) var maximum_consecutive_attack: int = 2
 
 var health: int = 180
 var state: StringName = STATE_IDLE
@@ -39,6 +41,8 @@ var distance_to_target: float = INF
 var attack_phase: StringName = &"ready"
 var attack_token: int = 0
 var attack_cooldown_left: float = 0.0
+var last_attack_id: StringName = &""
+var consecutive_attack_count: int = 0
 var _target: Hunter
 var _spawn_transform: Transform3D
 var _resolved_attacks: Dictionary = {}
@@ -49,6 +53,7 @@ var _attack_elapsed: float = 0.0
 var _locked_attack_direction := Vector3.FORWARD
 var _attack_resolved: bool = false
 var _charge_crashed: bool = false
+var _decision_rng := RandomNumberGenerator.new()
 var _body_material: StandardMaterial3D
 var _horn_material: StandardMaterial3D
 var _visuals: Node3D
@@ -92,18 +97,13 @@ func _physics_process(delta: float) -> void:
 		return
 	_face(offset, delta)
 	if attacks_enabled and attack_cooldown_left <= 0.0:
-		if distance_to_target >= CHARGE_ATTACK.minimum_range and distance_to_target <= CHARGE_ATTACK.maximum_range:
+		var selected_attack := _select_attack(distance_to_target)
+		if selected_attack:
 			_stop(STATE_READY, delta)
-			_start_attack(CHARGE_ATTACK)
-			return
-		if distance_to_target >= POUNCE_ATTACK.minimum_range and distance_to_target <= POUNCE_ATTACK.maximum_range:
-			_stop(STATE_READY, delta)
-			_start_attack(POUNCE_ATTACK)
+			_start_attack(selected_attack)
 			return
 	if distance_to_target <= attack_range:
 		_stop(STATE_READY, delta)
-		if attacks_enabled and attack_cooldown_left <= 0.0:
-			_start_attack(SWEEP_ATTACK)
 		return
 	_set_state(STATE_CHASING)
 	var desired := offset.normalized() * move_speed
@@ -143,6 +143,9 @@ func reset_monster() -> void:
 	attack_phase = &"ready"
 	attack_token = 0
 	attack_cooldown_left = 0.0
+	last_attack_id = &""
+	consecutive_attack_count = 0
+	_decision_rng.seed = decision_seed
 	_attack_resolved = false
 	_charge_crashed = false
 	if _visuals:
@@ -172,6 +175,11 @@ func _die() -> void:
 	defeated.emit()
 
 func _start_attack(data: MonsterAttackData) -> void:
+	if last_attack_id == data.attack_id:
+		consecutive_attack_count += 1
+	else:
+		last_attack_id = data.attack_id
+		consecutive_attack_count = 1
 	_attack_data = data
 	_attack_elapsed = 0.0
 	_attack_resolved = false
@@ -229,7 +237,8 @@ func _advance_attack(delta: float) -> void:
 
 func _finish_attack() -> void:
 	if _attack_data:
-		attack_cooldown_left = maxf(attack_cooldown_left, _attack_data.cooldown)
+		var repeat_multiplier := 1.65 if consecutive_attack_count >= maximum_consecutive_attack else 1.0
+		attack_cooldown_left = maxf(attack_cooldown_left, _attack_data.cooldown * repeat_multiplier)
 	_attack_data = null
 	_attack_elapsed = 0.0
 	_attack_resolved = false
@@ -244,6 +253,42 @@ func _finish_attack() -> void:
 	_hide_attack_telegraphs()
 	_set_state(STATE_READY)
 	_update_label()
+
+func _select_attack(distance: float) -> MonsterAttackData:
+	var candidates: Array[MonsterAttackData] = []
+	for data: MonsterAttackData in [SWEEP_ATTACK, POUNCE_ATTACK, CHARGE_ATTACK]:
+		if distance >= data.minimum_range and distance <= data.maximum_range:
+			candidates.append(data)
+	if candidates.is_empty():
+		return null
+	if candidates.size() == 1:
+		return candidates[0]
+	if consecutive_attack_count >= maximum_consecutive_attack:
+		var alternatives: Array[MonsterAttackData] = []
+		for data in candidates:
+			if data.attack_id != last_attack_id:
+				alternatives.append(data)
+		if not alternatives.is_empty():
+			candidates = alternatives
+	var total_weight := 0.0
+	for data in candidates:
+		total_weight += _selection_weight(data)
+	var roll := _decision_rng.randf() * total_weight
+	for data in candidates:
+		roll -= _selection_weight(data)
+		if roll <= 0.0:
+			return data
+	return candidates.back()
+
+func _selection_weight(data: MonsterAttackData) -> float:
+	var weight := data.selection_weight
+	if data.attack_id == last_attack_id:
+		weight *= 0.32
+	return weight
+
+func set_decision_seed(value: int) -> void:
+	decision_seed = value
+	_decision_rng.seed = decision_seed
 
 func _set_attack_phase(next_phase: StringName, force_emit: bool = false) -> void:
 	if attack_phase == next_phase and not force_emit:

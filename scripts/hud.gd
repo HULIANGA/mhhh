@@ -134,7 +134,7 @@ func _build_overlay() -> void:
 	box.add_child(start_button)
 	var reset_button := _button("Restart exercise", func(): reset_requested.emit())
 	box.add_child(reset_button)
-	_label(box, "PROTOTYPE  M3.5    /    Charge study", 12, MUTED)
+	_label(box, "PROTOTYPE  M3.6    /    Combat rhythm study", 12, MUTED)
 
 func show_menu(first_time: bool) -> void:
 	overlay.show()

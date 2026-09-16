@@ -14,6 +14,7 @@ extends Resource
 @export_range(0.0, 20.0) var minimum_range: float = 0.0
 @export_range(0.1, 30.0) var maximum_range: float = 3.0
 @export_range(0.0, 3.0) var cooldown: float = 0.45
+@export_range(0.01, 5.0) var selection_weight: float = 1.0
 
 func duration() -> float:
 	return windup + active + recovery
