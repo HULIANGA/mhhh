@@ -2,7 +2,7 @@
 
 个人开发的 3D 俯视角狩猎游戏。使用 **Godot 4.7.2 + GDScript**，交付 **Windows x86_64 桌面版与桌面浏览器版**；Mac 上通过浏览器验证。
 
-当前阶段：**M3 狩猎闭环已完成**。M3.1–M3.8 的功能、11 组全量自动回归、连续 10 局重开压力测试、Web/Windows 构建及连续 5 场浏览器人工验收均已通过。下一阶段将进入 M4 美术与表现替换；多种普攻动作暂缓到后续迭代。
+当前阶段：**M4 美术与表现替换**。M4.1 已建立 Blender 5.2.2、GLB 导出、资产契约和 Godot 真实导入测试，正在准备 M4.2 表现适配层与判定解耦；多种普攻动作暂缓到后续迭代。
 
 M2 已于 2026-09-16 通过输入、移动和战斗回归及浏览器人工验收，Web 与 Windows 构建成功；Windows 实机兼容检查保留到最终跨平台验收。详情见 [M2 验收记录](docs/M2_ACCEPTANCE.md)。
 
@@ -27,6 +27,8 @@ python3 tools/dev.py preview-lan
 
 已有引擎时可设置 `GODOT_BIN` 为可执行文件路径；导出仍需要运行安装脚本获取匹配模板。不要直接双击 `index.html`，必须通过 HTTP 服务加载。
 
+M4 美术资产锁定 **Blender 5.2.2 LTS**。工具会依次查找 `BLENDER_BIN`、项目 `.tools/Blender.app` 和 macOS 的标准 Blender 应用位置；未安装时可运行 `python3 tools/setup_blender.py` 下载到 `.tools/`，不会写入系统应用目录。游戏运行和普通 GLB 校验不依赖 Blender，只有重新生成美术资产时才需要。
+
 | 操作 | 效果 |
 |---|---|
 | WASD | 屏幕方向移动 |
@@ -45,6 +47,8 @@ python3 tools/dev.py preview-lan
 ```sh
 python3 tools/dev.py check     # 导入资源、检查脚本
 python3 tools/dev.py test      # 使用真实场景运行输入、移动、战斗和生命回归
+python3 tools/dev.py art-check # 校验已提交的 GLB，并通过 Godot 检查骨架、动画和挂点
+python3 tools/dev.py art-export # 使用 Blender 重新生成并校验 .blend/.glb 资产
 python3 tools/dev.py web       # build/web/index.html
 python3 tools/dev.py windows   # build/windows/MHHH.exe
 python3 tools/dev.py all       # 两个平台一起导出
@@ -70,4 +74,4 @@ python3 tools/dev.py serve-lan   # 局域网启动服务，不重新构建
 
 **调参练习**：修改 `data/` 中一次攻击的前摇、收招或伤害，重新导出 Web 后只比较这一项变化。动作越重，不代表所有时间都必须更长；优先让前摇可读、命中清楚、收招有代价。
 
-开发里程碑见 [开发计划](docs/DEVELOPMENT_PLAN.md)，下一阶段详见 [M4 分步实施计划](docs/M4_PLAN.md)，当前完成状态见 [M3 验收](docs/M3_ACCEPTANCE.md)，已完成阶段见 [M2 验收](docs/M2_ACCEPTANCE.md) 和 [M1 验收](docs/M1_ACCEPTANCE.md)。所有当前几何模型与图标均在项目中制作，不使用外部美术素材。
+开发里程碑见 [开发计划](docs/DEVELOPMENT_PLAN.md)，当前阶段详见 [M4 分步实施计划](docs/M4_PLAN.md) 与 [M4 验收](docs/M4_ACCEPTANCE.md)，已完成阶段见 [M3 验收](docs/M3_ACCEPTANCE.md)、[M2 验收](docs/M2_ACCEPTANCE.md) 和 [M1 验收](docs/M1_ACCEPTANCE.md)。所有当前几何模型与图标均在项目中制作，不使用外部美术素材。
