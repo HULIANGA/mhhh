@@ -70,4 +70,4 @@ python3 tools/dev.py serve-lan   # 局域网启动服务，不重新构建
 
 **调参练习**：修改 `data/` 中一次攻击的前摇、收招或伤害，重新导出 Web 后只比较这一项变化。动作越重，不代表所有时间都必须更长；优先让前摇可读、命中清楚、收招有代价。
 
-开发里程碑见 [开发计划](docs/DEVELOPMENT_PLAN.md)，当前进度见 [M3 验收](docs/M3_ACCEPTANCE.md)，已完成阶段见 [M2 验收](docs/M2_ACCEPTANCE.md) 和 [M1 验收](docs/M1_ACCEPTANCE.md)。所有当前几何模型与图标均在项目中制作，不使用外部美术素材。
+开发里程碑见 [开发计划](docs/DEVELOPMENT_PLAN.md)，下一阶段详见 [M4 分步实施计划](docs/M4_PLAN.md)，当前完成状态见 [M3 验收](docs/M3_ACCEPTANCE.md)，已完成阶段见 [M2 验收](docs/M2_ACCEPTANCE.md) 和 [M1 验收](docs/M1_ACCEPTANCE.md)。所有当前几何模型与图标均在项目中制作，不使用外部美术素材。
