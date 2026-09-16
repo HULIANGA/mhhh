@@ -54,8 +54,8 @@ func _ready() -> void:
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 7)
 	bottom.add_child(content)
-	target_health = _label(content, "TRAINING POST    /    240 HP", 12, ACCENT)
-	objective = _label(content, "Learn the rhythm: commit, connect, recover.", 19, INK)
+	target_health = _label(content, "FIELD BEAST    /    180 HP", 12, ACCENT)
+	objective = _label(content, "Close the distance. Commit, connect, recover.", 19, INK)
 	action_label = _label(content, "READY    /    AIM, THEN CHOOSE AN ACTION", 12, MUTED)
 	var health_row := HBoxContainer.new()
 	health_row.add_theme_constant_override("separation", 12)
@@ -134,12 +134,12 @@ func _build_overlay() -> void:
 	box.add_child(start_button)
 	var reset_button := _button("Restart exercise", func(): reset_requested.emit())
 	box.add_child(reset_button)
-	_label(box, "PROTOTYPE  M3.1    /    Hunter vitality", 12, MUTED)
+	_label(box, "PROTOTYPE  M3.2    /    First pursuit", 12, MUTED)
 
 func show_menu(first_time: bool) -> void:
 	overlay.show()
 	title.text = "A heavy blade rewards\ndeliberate hands." if first_time else "Take a breath."
-	description.text = "Practice on the post. Every swing has windup, impact, and recovery.\nWatch your stamina; an empty hunter cannot charge or roll." if first_time else "The field is paused. Your action is frozen in place.\nResume when you are ready to commit."
+	description.text = "The field beast will pursue, but cannot attack yet. Break its guard with deliberate swings.\nWatch your stamina; an empty hunter cannot charge or roll." if first_time else "The field is paused. Your action is frozen in place.\nResume when you are ready to commit."
 	start_button.text = "Begin blade study" if first_time else "Return to the field"
 	start_button.grab_focus()
 
@@ -158,8 +158,8 @@ func set_player_health(current: int, maximum: int) -> void:
 	player_health_value.text = "HP  %d / %d" % [current, maximum]
 
 func set_target_health(current: int, maximum: int) -> void:
-	target_health.text = "TRAINING POST    /    %d OF %d HP" % [current, maximum]
-	objective.text = "Post broken. Press R to rebuild it." if current <= 0 else "Learn the rhythm: commit, connect, recover."
+	target_health.text = "FIELD BEAST    /    %d OF %d HP" % [current, maximum]
+	objective.text = "Beast down. Press R to reset the pursuit." if current <= 0 else "Close the distance. Commit, connect, recover."
 
 func set_action(action: String, phase: String) -> void:
 	action_label.text = "%s    /    %s" % [action.to_upper(), phase.to_upper()]

@@ -7,6 +7,7 @@ var started: bool = false
 @onready var arena: Node3D = $Arena
 @onready var camera: Camera3D = $Camera3D
 @onready var training_dummy: TrainingDummy = $Arena/TrainingDummy
+@onready var monster: FieldMonster = $FieldMonster
 
 func _enter_tree() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -31,10 +32,11 @@ func _ready() -> void:
 	player.action_changed.connect(hud.set_action)
 	player.attack_landed.connect(_on_attack_landed)
 	player.action_denied.connect(hud.show_denied)
-	training_dummy.health_changed.connect(hud.set_target_health)
+	monster.health_changed.connect(hud.set_target_health)
+	monster.add_collision_exception_with(training_dummy)
 	hud.set_player_health(player.health, player.max_health)
 	hud.set_stamina(player.stamina, player.max_stamina)
-	hud.set_target_health(training_dummy.health, training_dummy.max_health)
+	hud.set_target_health(monster.health, monster.max_health)
 	hud.set_action("Ready", "Aim, then choose an action")
 	get_tree().paused = true
 	hud.show_menu(true)
@@ -75,6 +77,7 @@ func resume() -> void:
 func reset_exercise() -> void:
 	player.reset()
 	training_dummy.reset_target()
+	monster.reset_monster()
 	camera.snap_to_target()
 	resume()
 

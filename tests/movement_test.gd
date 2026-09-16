@@ -42,8 +42,8 @@ func _run() -> void:
 	for i in range(10):
 		game.reset_exercise()
 		await _frames(2)
-		_expect(hunter.travel_distance < 0.01 and game.training_dummy.health == game.training_dummy.max_health, "Reset restores the combat exercise #%d" % i)
-		_expect(game.get_child_count() == 4, "Reset keeps the scene population stable #%d" % i)
+		_expect(hunter.travel_distance < 0.01 and game.training_dummy.health == game.training_dummy.max_health and game.monster.health == game.monster.max_health, "Reset restores the combat exercise #%d" % i)
+		_expect(game.get_child_count() == 5, "Reset keeps the scene population stable #%d" % i)
 	print("MOVEMENT TESTS: %s" % ("PASS" if failures == 0 else "%d FAILURES" % failures))
 	paused = false
 	game.queue_free()
