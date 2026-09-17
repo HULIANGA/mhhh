@@ -21,6 +21,10 @@ func _run() -> void:
 	current_scene = game
 	var hunter: Hunter = game.get_node("Player")
 	var keyboard: HunterInputSource = hunter.input_source
+	var escape := InputEventKey.new()
+	escape.keycode = KEY_ESCAPE
+	escape.pressed = true
+	_expect(escape.is_action_pressed("pause"), "Logical Escape key maps to pause in Web-compatible input")
 	# Exercise button transitions while gameplay is paused, so only this test samples.
 	keyboard.clear()
 	keyboard.sample(root, hunter.position)
@@ -52,6 +56,15 @@ func _run() -> void:
 	hunter.add_child(source)
 	hunter.input_source = source
 	game.resume()
+	game._unhandled_input(escape)
+	_expect(paused and game.hud.overlay.visible, "Escape pauses a running exercise")
+	escape = escape.duplicate()
+	escape.pressed = false
+	game._unhandled_input(escape)
+	escape = escape.duplicate()
+	escape.pressed = true
+	game._unhandled_input(escape)
+	_expect(not paused and not game.hud.overlay.visible, "Escape resumes a paused exercise")
 	source.frame.movement = Vector2(0.5, 0)
 	source.frame.aim_direction = Vector3.RIGHT
 	await _frames(45)

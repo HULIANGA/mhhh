@@ -7,6 +7,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 GLB_PATH = ROOT / "assets/models/contract_fixture.glb"
 BLEND_PATH = ROOT / "art/blender/contract_fixture.blend"
+GREATSWORD_GLB_PATH = ROOT / "assets/models/greatsword.glb"
+GREATSWORD_BLEND_PATH = ROOT / "art/blender/greatsword.blend"
 REQUIRED_NODES = {
     "ContractRig",
     "ContractMesh",
@@ -17,6 +19,13 @@ REQUIRED_NODES = {
     "HornLTip",
     "HornRBase",
     "HornRTip",
+}
+GREATSWORD_REQUIRED_NODES = {
+    "GreatswordAsset",
+    "WeaponSocket",
+    "BladeCore",
+    "BladeBase",
+    "BladeTip",
 }
 
 
@@ -66,6 +75,37 @@ def main() -> None:
         "ART ASSET CHECK: PASS "
         f"({len(document['meshes'])} mesh, {len(document['skins'])} skin, "
         f"{len(document['animations'])} animation, {len(document['materials'])} material)"
+    )
+
+    if not GREATSWORD_BLEND_PATH.is_file():
+        fail(f"missing Blender source: {GREATSWORD_BLEND_PATH.relative_to(ROOT)}")
+    if not GREATSWORD_GLB_PATH.is_file():
+        fail(f"missing runtime GLB: {GREATSWORD_GLB_PATH.relative_to(ROOT)}")
+    try:
+        sword = glb_json(GREATSWORD_GLB_PATH)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        fail(f"greatsword: {error}")
+    sword_names = {node.get("name") for node in sword.get("nodes", [])}
+    missing_sword_nodes = sorted(GREATSWORD_REQUIRED_NODES - sword_names)
+    if missing_sword_nodes:
+        fail(f"greatsword missing nodes: {', '.join(missing_sword_nodes)}")
+    material_count = len(sword.get("materials", []))
+    if material_count > 3:
+        fail(f"greatsword exceeds 3 material slots: {material_count}")
+    triangle_count = 0
+    accessors = sword.get("accessors", [])
+    for mesh in sword.get("meshes", []):
+        for primitive in mesh.get("primitives", []):
+            if primitive.get("mode", 4) != 4:
+                continue
+            accessor_index = primitive.get("indices")
+            if accessor_index is not None:
+                triangle_count += accessors[accessor_index]["count"] // 3
+    if triangle_count <= 0 or triangle_count > 3000:
+        fail(f"greatsword triangle budget invalid: {triangle_count}")
+    print(
+        "GREATSWORD ASSET CHECK: PASS "
+        f"({len(sword.get('meshes', []))} meshes, {triangle_count} triangles, {material_count} materials)"
     )
 
 

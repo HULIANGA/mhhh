@@ -2,6 +2,8 @@ class_name HunterPresentation
 extends Node3D
 ## Replaceable hunter art boundary. Gameplay talks to states and stable sockets only.
 
+const GREATSWORD_SCENE := preload("res://assets/models/greatsword.glb")
+
 const POSE_REST_FORWARD_UP := Vector3(0.0, 0.35, -0.94)
 const POSE_RIGHT_HIGH := Vector3(0.62, 0.58, -0.53)
 const POSE_LEFT_LOW := Vector3(-0.62, -0.48, -0.62)
@@ -13,9 +15,10 @@ const BLADE_TOP_RIGHT_TILT := deg_to_rad(10.0)
 const BLADE_TOP_LEFT_TILT := deg_to_rad(-10.0)
 
 var visuals: Node3D
+var weapon_model: Node3D
 var weapon_socket: Node3D
-var blade_base: Marker3D
-var blade_tip: Marker3D
+var blade_base: Node3D
+var blade_tip: Node3D
 var current_state: StringName = &"free"
 var current_phase: StringName = &"ready"
 var hit_feedback_time: float = 0.0
@@ -238,20 +241,15 @@ func _build_placeholder() -> void:
 	head.rings = 4
 	FieldGeometry.instance(visuals, head, Vector3(0, 1.48, 0), steel)
 	FieldGeometry.box(visuals, Vector3(0.36, 0.08, 0.10), Vector3(0, 1.49, -0.23), dark)
-	weapon_socket = Node3D.new()
-	weapon_socket.name = "WeaponSocket"
-	visuals.add_child(weapon_socket)
+	weapon_model = GREATSWORD_SCENE.instantiate() as Node3D
+	weapon_model.name = "Greatsword"
+	visuals.add_child(weapon_model)
+	weapon_socket = _find_named_node(weapon_model, "WeaponSocket") as Node3D
+	blade_base = _find_named_node(weapon_model, "BladeBase") as Node3D
+	blade_tip = _find_named_node(weapon_model, "BladeTip") as Node3D
+	assert(weapon_socket != null and blade_base != null and blade_tip != null, "Greatsword asset must expose WeaponSocket, BladeBase, and BladeTip")
 	weapon_socket.position = _weapon_rest_position
 	weapon_socket.quaternion = _sword_rest_pose()
-	var model := Node3D.new()
-	model.name = "PlaceholderSword"
-	weapon_socket.add_child(model)
-	FieldGeometry.box(model, Vector3(0.12, 0.42, 0.13), Vector3.ZERO, dark)
-	FieldGeometry.box(model, Vector3(0.17, 0.11, 0.58), Vector3(0, 0.25, 0), gold)
-	FieldGeometry.box(model, Vector3(0.30, 1.55, 0.11), Vector3(0, 1.08, 0), steel)
-	FieldGeometry.box(model, Vector3(0.035, 1.52, 0.13), Vector3(0.165, 1.08, 0), FieldGeometry.material(Color("e7f2ec")))
-	blade_base = _marker(weapon_socket, "BladeBase", Vector3(0.0, 0.30, 0.0))
-	blade_tip = _marker(weapon_socket, "BladeTip", Vector3(0.0, 1.82, 0.0))
 	FieldGeometry.ring(self, 0.60, 0.035, Vector3(0, 0.04, 0), FieldGeometry.material(Color("86d6bc"), 0.4))
 	var arrow := CylinderMesh.new()
 	arrow.top_radius = 0.0
@@ -261,12 +259,14 @@ func _build_placeholder() -> void:
 	var facing_marker := FieldGeometry.instance(visuals, arrow, Vector3(0, 0.09, -0.9), gold)
 	facing_marker.rotation.x = -PI / 2.0
 
-func _marker(parent: Node3D, marker_name: String, at: Vector3) -> Marker3D:
-	var result := Marker3D.new()
-	result.name = marker_name
-	result.position = at
-	parent.add_child(result)
-	return result
+func _find_named_node(node: Node, target_name: StringName) -> Node:
+	if node.name == target_name:
+		return node
+	for child: Node in node.get_children():
+		var found := _find_named_node(child, target_name)
+		if found:
+			return found
+	return null
 
 func _smooth(value: float) -> float:
 	var clamped := clampf(value, 0.0, 1.0)

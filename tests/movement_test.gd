@@ -15,6 +15,10 @@ func _run() -> void:
 	hunter = game.get_node("Player")
 	game.monster.attacks_enabled = false
 	_expect(paused, "The field waits for explicit start")
+	var waiting_monster_position: Vector3 = game.monster.global_position
+	await _frames(60)
+	_expect(game.monster.global_position.is_equal_approx(waiting_monster_position), "Monster stays at spawn while the start menu is open")
+	_expect(game.monster.state == FieldMonster.STATE_IDLE, "Monster AI stays idle before the exercise starts")
 	game.resume()
 	await _frames(12)
 	_expect(hunter.is_on_floor(), "Player rests on the ground collision")

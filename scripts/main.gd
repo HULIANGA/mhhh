@@ -26,7 +26,9 @@ func _enter_tree() -> void:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
 			var event := InputEventKey.new()
-			event.physical_keycode = bindings[action]
+			# Web exports report non-positional menu keys through keycode.
+			# physical_keycode remains appropriate for gameplay controls such as WASD.
+			event.keycode = bindings[action]
 			InputMap.action_add_event(action, event)
 
 func _ready() -> void:

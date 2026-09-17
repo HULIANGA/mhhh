@@ -60,15 +60,17 @@ def export_art_assets():
     ).stdout
     if not re.search(rf"(?m)^Blender {re.escape(BLENDER_VERSION)}(?:\s|$)", version):
         raise SystemExit(f"M4 assets require Blender {BLENDER_VERSION}; selected executable reported:\n{version}")
-    command = [
-        executable, "--background", "--factory-startup",
-        "--python", str(ROOT / "art/blender/build_contract_asset.py"),
-        "--", "--root", str(ROOT),
-    ]
-    result = subprocess.run(command, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    print(result.stdout, end="", flush=True)
-    if result.returncode:
-        raise SystemExit(result.returncode)
+    scripts = ("build_contract_asset.py", "build_greatsword.py")
+    for script in scripts:
+        command = [
+            executable, "--background", "--factory-startup",
+            "--python", str(ROOT / "art/blender" / script),
+            "--", "--root", str(ROOT),
+        ]
+        result = subprocess.run(command, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        print(result.stdout, end="", flush=True)
+        if result.returncode:
+            raise SystemExit(result.returncode)
 
 
 def validate_art_assets():
@@ -182,17 +184,20 @@ def main():
         validate_art_assets()
         import_project()
         run("--script", "res://tests/art_asset_test.gd")
+        run("--script", "res://tests/greatsword_test.gd")
         return
     if args.command == "art-check":
         validate_art_assets()
         import_project()
         run("--script", "res://tests/art_asset_test.gd")
+        run("--script", "res://tests/greatsword_test.gd")
         return
     if args.command not in serve_commands:
         import_project()
     if args.command == "test":
         validate_art_assets()
         run("--script", "res://tests/art_asset_test.gd")
+        run("--script", "res://tests/greatsword_test.gd")
         run("--script", "res://tests/presentation_test.gd")
         run("--script", "res://tests/input_test.gd")
         run("--script", "res://tests/movement_test.gd")
