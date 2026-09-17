@@ -31,6 +31,7 @@ const CHARGE_ATTACK: MonsterAttackData = preload("res://data/monster_charge.tres
 @export var arena_min := Vector2(-16.65, -13.65)
 @export var arena_max := Vector2(16.65, 13.65)
 @export var attacks_enabled: bool = true
+@export var ai_enabled: bool = true
 @export var decision_seed: int = 316031
 @export_range(1, 4) var maximum_consecutive_attack: int = 2
 
@@ -76,6 +77,9 @@ func _physics_process(delta: float) -> void:
 	_update_feedback(delta)
 	if is_dead:
 		velocity = Vector3.ZERO
+		return
+	if not ai_enabled:
+		_stop(STATE_IDLE, delta)
 		return
 	attack_cooldown_left = maxf(attack_cooldown_left - delta, 0.0)
 	if state == STATE_ATTACKING:
@@ -151,6 +155,21 @@ func reset_monster() -> void:
 
 func set_target(target: Hunter) -> void:
 	_target = target
+
+func set_ai_enabled(enabled: bool) -> void:
+	ai_enabled = enabled
+	if enabled or is_dead:
+		return
+	velocity = Vector3.ZERO
+	_attack_data = null
+	_attack_elapsed = 0.0
+	_attack_resolved = false
+	_charge_crashed = false
+	attack_phase = &"ready"
+	_presentation.hide_attack_telegraphs()
+	_presentation.reset_pose()
+	_set_state(STATE_IDLE)
+	_update_label()
 
 func _die() -> void:
 	if is_dead:

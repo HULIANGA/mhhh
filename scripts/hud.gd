@@ -3,6 +3,7 @@ extends CanvasLayer
 signal continue_requested
 signal pause_requested
 signal reset_requested
+signal monster_ai_requested(enabled: bool)
 
 const INK := Color("edf0df")
 const MUTED := Color("a6bcb4")
@@ -13,6 +14,7 @@ var title: Label
 var description: Label
 var start_button: Button
 var reset_button: Button
+var monster_ai_button: Button
 var objective: Label
 var target_health: Label
 var action_label: Label
@@ -24,6 +26,7 @@ var feedback: Label
 var debug_label: Label
 var _root: Control
 var _feedback_time: float = 0.0
+var _monster_ai_enabled: bool = true
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -44,6 +47,14 @@ func _ready() -> void:
 	pause_button.offset_top = 28
 	pause_button.offset_right = -30
 	pause_button.offset_bottom = 70
+	monster_ai_button = _button("Stop monster AI", _request_monster_ai_toggle)
+	monster_ai_button.focus_mode = Control.FOCUS_NONE
+	_root.add_child(monster_ai_button)
+	monster_ai_button.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	monster_ai_button.offset_left = -230
+	monster_ai_button.offset_top = 78
+	monster_ai_button.offset_right = -30
+	monster_ai_button.offset_bottom = 120
 	var bottom := PanelContainer.new()
 	bottom.add_theme_stylebox_override("panel", _panel(Color(0.045, 0.09, 0.1, 0.92)))
 	_root.add_child(bottom)
@@ -165,6 +176,14 @@ func hide_battle_result() -> void:
 	start_button.show()
 	reset_button.text = "Restart exercise"
 	overlay.hide()
+
+func set_monster_ai_enabled(enabled: bool) -> void:
+	_monster_ai_enabled = enabled
+	monster_ai_button.text = "Stop monster AI" if enabled else "Enable monster AI"
+	monster_ai_button.tooltip_text = "Pause pursuit and attacks for animation review" if enabled else "Resume monster pursuit and attacks"
+
+func _request_monster_ai_toggle() -> void:
+	monster_ai_requested.emit(not _monster_ai_enabled)
 
 func set_stamina(current: float, maximum: float) -> void:
 	stamina_bar.max_value = maximum

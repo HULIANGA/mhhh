@@ -11,6 +11,7 @@ var hud: CanvasLayer
 var started: bool = false
 var battle_state: StringName = BATTLE_WAITING
 var settlement_count: int = 0
+var monster_ai_enabled: bool = true
 var _settlement_pending: bool = false
 @onready var player: Hunter = $Player
 @onready var arena: FieldArena = $Arena
@@ -37,6 +38,7 @@ func _ready() -> void:
 	hud.continue_requested.connect(resume)
 	hud.pause_requested.connect(pause)
 	hud.reset_requested.connect(reset_exercise)
+	hud.monster_ai_requested.connect(set_monster_ai_enabled)
 	player.health_changed.connect(hud.set_player_health)
 	player.hit_received.connect(_on_player_hit)
 	player.stamina_changed.connect(hud.set_stamina)
@@ -51,6 +53,7 @@ func _ready() -> void:
 	hud.set_stamina(player.stamina, player.max_stamina)
 	hud.set_target_health(monster.health, monster.max_health)
 	hud.set_action("Ready", "Aim, then choose an action")
+	set_monster_ai_enabled(monster_ai_enabled)
 	get_tree().paused = true
 	hud.show_menu(true)
 
@@ -99,9 +102,16 @@ func reset_exercise() -> void:
 	training_dummy.reset_target()
 	arena.reset_obstacles()
 	monster.reset_monster()
+	monster.set_ai_enabled(monster_ai_enabled)
 	camera.snap_to_target()
 	hud.hide_battle_result()
 	resume()
+
+func set_monster_ai_enabled(enabled: bool) -> void:
+	monster_ai_enabled = enabled
+	monster.set_ai_enabled(enabled)
+	if is_instance_valid(hud):
+		hud.set_monster_ai_enabled(enabled)
 
 func _request_battle_settlement() -> void:
 	if battle_state != BATTLE_RUNNING or _settlement_pending:

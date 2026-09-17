@@ -9,6 +9,8 @@ GLB_PATH = ROOT / "assets/models/contract_fixture.glb"
 BLEND_PATH = ROOT / "art/blender/contract_fixture.blend"
 GREATSWORD_GLB_PATH = ROOT / "assets/models/greatsword.glb"
 GREATSWORD_BLEND_PATH = ROOT / "art/blender/greatsword.blend"
+HUNTER_GLB_PATH = ROOT / "assets/models/hunter.glb"
+HUNTER_BLEND_PATH = ROOT / "art/blender/hunter.blend"
 REQUIRED_NODES = {
     "ContractRig",
     "ContractMesh",
@@ -26,6 +28,41 @@ GREATSWORD_REQUIRED_NODES = {
     "BladeCore",
     "BladeBase",
     "BladeTip",
+}
+HUNTER_REQUIRED_NODES = {
+    "HunterRig",
+    "Root",
+    "Pelvis",
+    "Spine",
+    "Chest",
+    "Neck",
+    "Head",
+    "UpperArm.L",
+    "Forearm.L",
+    "Hand.L",
+    "UpperArm.R",
+    "Forearm.R",
+    "Hand.R",
+    "WeaponSocket",
+    "Thigh.L",
+    "Shin.L",
+    "Foot.L",
+    "Thigh.R",
+    "Shin.R",
+    "Foot.R",
+}
+HUNTER_REQUIRED_ANIMATIONS = {
+    "idle_loop",
+    "run_loop",
+    "light_attack",
+    "charge_enter",
+    "charge_hold",
+    "charge_release_1",
+    "charge_release_2",
+    "charge_cancel",
+    "dodge",
+    "hit",
+    "defeated",
 }
 
 
@@ -106,6 +143,44 @@ def main() -> None:
     print(
         "GREATSWORD ASSET CHECK: PASS "
         f"({len(sword.get('meshes', []))} meshes, {triangle_count} triangles, {material_count} materials)"
+    )
+
+    if not HUNTER_BLEND_PATH.is_file():
+        fail(f"missing Blender source: {HUNTER_BLEND_PATH.relative_to(ROOT)}")
+    if not HUNTER_GLB_PATH.is_file():
+        fail(f"missing runtime GLB: {HUNTER_GLB_PATH.relative_to(ROOT)}")
+    try:
+        hunter = glb_json(HUNTER_GLB_PATH)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        fail(f"hunter: {error}")
+    hunter_names = {node.get("name") for node in hunter.get("nodes", [])}
+    missing_hunter_nodes = sorted(HUNTER_REQUIRED_NODES - hunter_names)
+    if missing_hunter_nodes:
+        fail(f"hunter missing nodes/bones: {', '.join(missing_hunter_nodes)}")
+    hunter_animations = {animation.get("name") for animation in hunter.get("animations", [])}
+    missing_hunter_animations = sorted(HUNTER_REQUIRED_ANIMATIONS - hunter_animations)
+    if missing_hunter_animations:
+        fail(f"hunter missing animations: {', '.join(missing_hunter_animations)}")
+    if not hunter.get("skins"):
+        fail("hunter contains no skin/skeleton")
+    hunter_material_count = len(hunter.get("materials", []))
+    if hunter_material_count <= 0 or hunter_material_count > 6:
+        fail(f"hunter material budget invalid: {hunter_material_count}")
+    hunter_triangle_count = 0
+    hunter_accessors = hunter.get("accessors", [])
+    for mesh in hunter.get("meshes", []):
+        for primitive in mesh.get("primitives", []):
+            if primitive.get("mode", 4) != 4:
+                continue
+            accessor_index = primitive.get("indices")
+            if accessor_index is not None:
+                hunter_triangle_count += hunter_accessors[accessor_index]["count"] // 3
+    if hunter_triangle_count <= 0 or hunter_triangle_count > 15000:
+        fail(f"hunter triangle budget invalid: {hunter_triangle_count}")
+    print(
+        "HUNTER ASSET CHECK: PASS "
+        f"({len(hunter.get('meshes', []))} meshes, {hunter_triangle_count} triangles, "
+        f"{hunter_material_count} materials, {len(hunter_animations)} animations)"
     )
 
 

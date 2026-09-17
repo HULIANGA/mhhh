@@ -66,7 +66,7 @@ func _run() -> void:
 		var expected_edge := (edge_hint - blade_axis * edge_hint.dot(blade_axis)).normalized()
 		minimum_light_edge_alignment = minf(minimum_light_edge_alignment, sword_pivot.basis.x.normalized().dot(expected_edge))
 	_expect(minimum_light_edge_alignment > 0.999, "Light attack keeps a stable cutting-edge orientation without axial rotation")
-	_expect(sword_pivot.position.is_equal_approx(grip_origin), "Attack rotates the sword without moving its grip pivot")
+	_expect(sword_pivot.position.is_equal_approx(grip_origin), "Attack rotation introduces no local offset from the right-hand weapon attachment")
 	await _frames(35)
 	_expect(target.hit_count == 1 and target.damage_received == 16, "One attack deals damage once across every active frame")
 	_expect(hunter.action_state == Hunter.STATE_FREE, "Light attack returns to ready after recovery")
