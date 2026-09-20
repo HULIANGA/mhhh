@@ -220,23 +220,22 @@ def build_actions(armature) -> None:
         (19, rest),
         (25, {"Thigh.L": (28, 0, 0), "Shin.L": (-16, 0, 0), "Thigh.R": (-28, 0, 0), "UpperArm.L": (-16, 0, 0), "UpperArm.R": (16, 0, 0), "Chest": (4, 0, 0)}),
     ])
-    light_attack_raised = {
-        "Chest": (-8, 0, -12),
+    make_action(armature, "light_attack", [(1, ready_arms), (8, {"Chest": (-8, 0, -20), "UpperArm.L": (-30, 5, -25), "UpperArm.R": (-35, -5, -18)}), (14, {"Chest": (12, 0, 24), "UpperArm.L": (28, 0, 20), "UpperArm.R": (32, 0, 24)}), (25, ready_arms)])
+    charge_pose = {
+        "Pelvis": (3, 0, 0), "Spine": (9, 0, 0), "Chest": (18, 0, 0),
         "UpperArm.L": (42, 8, -12), "Forearm.L": (24, 0, 8),
         "UpperArm.R": (48, -8, 12), "Forearm.R": (22, 0, -8),
+        "Thigh.L": (8, 0, 0), "Thigh.R": (8, 0, 0),
     }
-    light_attack_strike = {
-        "Chest": (12, 0, 24),
-        "UpperArm.L": (18, 0, 18), "Forearm.L": (-8, 0, 6),
-        "UpperArm.R": (22, 0, 22), "Forearm.R": (-6, 0, -6),
-    }
-    make_action(armature, "light_attack", [(1, ready_arms), (8, light_attack_raised), (14, light_attack_strike), (25, ready_arms)])
-    charge_pose = {"Chest": (-10, 0, 0), "UpperArm.L": (-42, 8, -12), "Forearm.L": (-30, 0, 8), "UpperArm.R": (-48, -8, 12), "Forearm.R": (-28, 0, -8), "Thigh.L": (8, 0, 0), "Thigh.R": (8, 0, 0)}
     make_action(armature, "charge_enter", [(1, ready_arms), (25, charge_pose)])
-    make_action(armature, "charge_hold", [(1, charge_pose), (13, {**charge_pose, "Chest": (-13, 0, 0), "Head": (4, 0, 0)}), (25, charge_pose)])
-    release_finish = {"Chest": (24, 0, 0), "UpperArm.L": (38, 0, 0), "UpperArm.R": (42, 0, 0), "Thigh.L": (-8, 0, 0), "Thigh.R": (-8, 0, 0)}
+    make_action(armature, "charge_hold", [(1, charge_pose), (13, {**charge_pose, "Spine": (11, 0, 0), "Chest": (22, 0, 0), "Head": (-4, 0, 0)}), (25, charge_pose)])
+    release_finish = {
+        "Pelvis": (-5, 0, 0), "Spine": (-10, 0, 0), "Chest": (-26, 0, 0),
+        "UpperArm.L": (38, 0, 0), "UpperArm.R": (42, 0, 0),
+        "Thigh.L": (-8, 0, 0), "Thigh.R": (-8, 0, 0),
+    }
     make_action(armature, "charge_release_1", [(1, charge_pose), (12, release_finish), (25, ready_arms)])
-    make_action(armature, "charge_release_2", [(1, {**charge_pose, "Chest": (-18, 0, 0)}), (14, {**release_finish, "Chest": (32, 0, 0)}), (25, ready_arms)])
+    make_action(armature, "charge_release_2", [(1, charge_pose), (14, {**release_finish, "Spine": (-13, 0, 0), "Chest": (-34, 0, 0)}), (25, ready_arms)])
     make_action(armature, "charge_cancel", [(1, charge_pose), (25, ready_arms)])
     make_action(armature, "dodge", [(1, {"Pelvis": (-12, 0, 0), "Chest": (18, 0, 0)}), (12, {"Root": (-155, 0, 0), "Pelvis": (-20, 0, 0)}), (25, rest)])
     make_action(armature, "hit", [(1, rest), (8, {"Chest": (-18, 0, -12), "Head": (12, 0, 8)}), (16, rest)])

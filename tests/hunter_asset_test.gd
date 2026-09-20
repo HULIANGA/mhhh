@@ -46,16 +46,31 @@ func _run() -> void:
 				player.seek(animation.length * fraction, true)
 				_expect(hunter.transform.is_equal_approx(model_transform), animation_name + " keeps the imported model root in place")
 		player.stop()
-		if skeleton and player.has_animation("light_attack"):
+		if skeleton and player.has_animation("charge_enter"):
 			var weapon_bone := skeleton.find_bone("WeaponSocket")
-			var attack := player.get_animation("light_attack")
-			player.play("light_attack")
+			var head_bone := skeleton.find_bone("Head")
+			var charge := player.get_animation("charge_enter")
+			player.play("charge_enter")
 			player.seek(0.0, true)
 			var ready_grip := skeleton.get_bone_global_pose(weapon_bone).origin
-			player.seek(attack.length * 7.0 / 24.0, true)
+			var ready_head := skeleton.get_bone_global_pose(head_bone).origin
+			player.seek(charge.length * 0.5, true)
+			var lifting_grip := skeleton.get_bone_global_pose(weapon_bone).origin
+			player.seek(charge.length, true)
 			var raised_grip := skeleton.get_bone_global_pose(weapon_bone).origin
-			_expect(raised_grip.y > ready_grip.y + 0.2, "Light attack raises the weapon hand during windup")
-			_expect(raised_grip.z < ready_grip.z - 0.1, "Light attack raises the weapon in front instead of behind the hunter")
+			var charged_head := skeleton.get_bone_global_pose(head_bone).origin
+			_expect(raised_grip.y > ready_grip.y + 0.2, "Charge entry raises the weapon hand")
+			_expect(lifting_grip.z < ready_grip.z - 0.1, "Charge entry moves the weapon forward while lifting it")
+			_expect(raised_grip.z < ready_grip.z + 0.05, "Charged weapon remains overhead instead of moving behind the hunter")
+			_expect(charged_head.z > ready_head.z + 0.15, "Charge entry gradually leans the upper body backward")
+			if player.has_animation("charge_release_1"):
+				var release := player.get_animation("charge_release_1")
+				player.play("charge_release_1")
+				player.seek(release.length * 11.0 / 24.0, true)
+				var strike_head := skeleton.get_bone_global_pose(head_bone).origin
+				var strike_grip := skeleton.get_bone_global_pose(weapon_bone).origin
+				_expect(strike_head.z < charged_head.z - 0.4, "Charge release quickly leans the upper body forward")
+				_expect(strike_grip.y < raised_grip.y - 0.5, "Charge release quickly chops the weapon downward")
 			player.stop()
 	var triangles := _triangle_count(hunter)
 	_expect(triangles > 0 and triangles <= 15000, "Hunter stays within the 15,000 triangle budget")

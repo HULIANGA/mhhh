@@ -442,6 +442,7 @@ func _animate_action() -> void:
 		_charge_release_start_elapsed,
 		charge_tier,
 		_action_data,
+		CHARGE_ACTIONS[0].charge_threshold,
 		CHARGE_ACTIONS[1].charge_threshold,
 		CHARGE_CANCEL_DURATION,
 		DODGE_ACTION.duration()

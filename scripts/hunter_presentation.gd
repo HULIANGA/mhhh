@@ -70,6 +70,7 @@ func animate_action(
 	charge_release_start: float,
 	charge_tier: int,
 	action_data: CombatActionData,
+	charge_ready_time: float,
 	full_charge_time: float,
 	charge_cancel_duration: float,
 	dodge_duration: float
@@ -89,7 +90,7 @@ func animate_action(
 	elif state == &"dodging":
 		pass
 	if hit_feedback_time <= 0.0:
-		_animate_model_action(state, elapsed, charge_elapsed, charge_tier, action_data, full_charge_time, charge_cancel_duration, dodge_duration)
+		_animate_model_action(state, elapsed, charge_elapsed, charge_tier, action_data, charge_ready_time, full_charge_time, charge_cancel_duration, dodge_duration)
 
 func start_hit_feedback(hunter_position: Vector3, hit_position: Vector3) -> void:
 	hit_feedback_time = HIT_FEEDBACK_DURATION
@@ -264,6 +265,7 @@ func _animate_model_action(
 	charge_elapsed: float,
 	charge_tier: int,
 	action_data: CombatActionData,
+	charge_ready_time: float,
 	full_charge_time: float,
 	charge_cancel_duration: float,
 	dodge_duration: float
@@ -274,7 +276,7 @@ func _animate_model_action(
 		if charge_tier >= 1:
 			_play_loop(&"charge_hold", 1.0)
 		else:
-			_sample_animation(&"charge_enter", charge_elapsed / maxf(full_charge_time * 0.5, 0.001))
+			_sample_animation(&"charge_enter", charge_elapsed / maxf(charge_ready_time, 0.001))
 	elif state == &"charge_cancel":
 		_sample_animation(&"charge_cancel", elapsed / maxf(charge_cancel_duration, 0.001))
 	elif state == &"light_attack" and action_data:
