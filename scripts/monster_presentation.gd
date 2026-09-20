@@ -23,7 +23,6 @@ var _animation_player: AnimationPlayer
 var _feedback_materials: Array[StandardMaterial3D] = []
 var _feedback_base_colors: Array[Color] = []
 var _horn_materials: Array[StandardMaterial3D] = []
-var _health_label: Label3D
 var _pounce_telegraph: Node3D
 var _charge_telegraph: MeshInstance3D
 var _airborne := false
@@ -95,15 +94,6 @@ func hide_attack_telegraphs() -> void:
 	_charge_telegraph.hide()
 
 
-func update_status(health: int, maximum: int, state: StringName, data: MonsterAttackData, phase: StringName) -> void:
-	if health <= 0:
-		_health_label.text = "FIELD BEAST\nDOWN — R TO RESET"
-	elif state == &"attacking" and data:
-		_health_label.text = "FIELD BEAST  /  %d / %d\n%s — %s" % [health, maximum, data.display_name.to_upper(), String(phase).to_upper()]
-	else:
-		_health_label.text = "FIELD BEAST\n%d / %d" % [health, maximum]
-
-
 func play_defeated() -> void:
 	current_state = &"dead"
 	current_phase = &"down"
@@ -129,10 +119,6 @@ func reset_pose() -> void:
 
 func motion_probe_sockets() -> Array[Marker3D]:
 	return [body_center, head_front]
-
-
-func status_text() -> String:
-	return _health_label.text
 
 
 func pounce_telegraph_visible() -> bool:
@@ -207,13 +193,6 @@ func _build_model(attack_range: float) -> void:
 	head_front = _bone_marker("Head", Vector3(0.0, 0.5, 0.0))
 	FieldGeometry.ring(self, attack_range, 0.045, Vector3(0, 0.055, 0), FieldGeometry.material(Color("c98665"), 0.28))
 	_build_attack_telegraphs()
-	_health_label = Label3D.new()
-	_health_label.position = Vector3(0, 2.75, 0)
-	_health_label.font_size = 42
-	_health_label.pixel_size = 0.008
-	_health_label.modulate = Color("eadab5")
-	_health_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	add_child(_health_label)
 	_sample_animation(&"idle", 0.0)
 
 
@@ -231,16 +210,16 @@ func _bone_marker(bone_name: StringName, at: Vector3) -> Marker3D:
 
 
 func _build_attack_telegraphs() -> void:
-	var pounce_material := FieldGeometry.material(Color("e5c268"), 0.55)
+	var pounce_material := FieldGeometry.material(Color("f0cf83"), 0.48)
 	pounce_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	pounce_material.albedo_color.a = 0.52
+	pounce_material.albedo_color.a = 0.46
 	_pounce_telegraph = Node3D.new()
 	_pounce_telegraph.name = "PounceLandingTelegraph"
 	add_child(_pounce_telegraph)
 	FieldGeometry.ring(_pounce_telegraph, 1.15, 0.11, Vector3(0, 0.02, 0), pounce_material)
-	var charge_material := FieldGeometry.material(Color("e46f45"), 0.72)
+	var charge_material := FieldGeometry.material(Color("d96f55"), 0.62)
 	charge_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	charge_material.albedo_color.a = 0.42
+	charge_material.albedo_color.a = 0.34
 	_charge_telegraph = FieldGeometry.box(self, Vector3(1.7, 0.025, 1.0), Vector3.ZERO, charge_material)
 	_charge_telegraph.name = "ChargePathTelegraph"
 	_charge_telegraph.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

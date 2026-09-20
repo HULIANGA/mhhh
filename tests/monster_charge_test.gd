@@ -30,8 +30,9 @@ func _run() -> void:
 
 	_prepare_encounter(Vector3(4, 0.05, -5.0), Vector3(4, 0.05, 8.0))
 	await _until_phase(FieldMonster.PHASE_WINDUP)
+	await physics_frame
 	_expect(monster._attack_data == FieldMonster.CHARGE_ATTACK, "Far range selects charge while medium and close ranges remain assigned to pounce and sweep")
-	_expect(monster._presentation.status_text().contains("CHARGE") and monster._presentation.status_text().contains("WINDUP"), "Charge windup exposes a readable warning")
+	_expect(monster._presentation.current_animation == &"charge_windup", "Charge windup is communicated by its authored silhouette")
 	await _frames(24)
 	_expect(monster._presentation.charge_telegraph_visible() and monster._presentation.charge_telegraph_length() > 12.0 and not monster._presentation.pounce_telegraph_visible(), "Charge windup shows a long lane instead of a landing marker")
 	_expect(monster._presentation.horn_glowing(), "Charge windup activates the presentation adapter's horn warning")

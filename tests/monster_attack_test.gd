@@ -33,10 +33,10 @@ func _run() -> void:
 	_prepare_encounter(Vector3(0, 0.05, -2.2))
 	await _until_phase(FieldMonster.PHASE_WINDUP)
 	_expect(monster.state == FieldMonster.STATE_ATTACKING and monster.attack_phase == FieldMonster.PHASE_WINDUP, "Entering sweep range starts the shared windup phase")
-	_expect(monster._presentation.status_text().contains("WINDUP"), "Windup exposes a readable presentation warning")
+	_expect(not _contains_label_3d(monster._presentation), "Normal play has no overhead monster status text")
 	await _until_phase(FieldMonster.PHASE_ACTIVE)
-	_expect(monster._presentation.status_text().contains("ACTIVE"), "Active frames expose a distinct presentation warning")
-	_expect(hunter.health == hunter.max_health, "Red active warning appears briefly before horn probes can deal damage")
+	_expect(monster._presentation.current_animation == &"sweep", "Sweep silhouette remains the active-frame warning without phase text")
+	_expect(hunter.health == hunter.max_health, "Visible active motion appears briefly before horn probes can deal damage")
 	await _until_phase(FieldMonster.PHASE_RECOVERY)
 	_expect(observed_phases == [FieldMonster.PHASE_WINDUP, FieldMonster.PHASE_ACTIVE, FieldMonster.PHASE_RECOVERY], "Sweep advances through windup, active, and recovery in order")
 	_expect(hunter.health == hunter.max_health - FieldMonster.SWEEP_ATTACK.damage, "Sweep applies its configured damage exactly once across all active frames")
@@ -128,3 +128,11 @@ func _expect(condition: bool, message: String) -> void:
 	else:
 		failures += 1
 		printerr("FAIL: %s" % message)
+
+func _contains_label_3d(node: Node) -> bool:
+	if node is Label3D:
+		return true
+	for child: Node in node.get_children():
+		if _contains_label_3d(child):
+			return true
+	return false

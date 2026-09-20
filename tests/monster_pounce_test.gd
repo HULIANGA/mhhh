@@ -30,8 +30,9 @@ func _run() -> void:
 
 	_prepare_encounter(Vector3(0, 0.05, -5.0))
 	await _until_phase(FieldMonster.PHASE_WINDUP)
+	await physics_frame
 	_expect(monster._attack_data == FieldMonster.POUNCE_ATTACK, "Medium range selects the configured pounce instead of the close sweep")
-	_expect(monster._presentation.status_text().contains("POUNCE") and monster._presentation.status_text().contains("WINDUP"), "Pounce windup has a readable phase warning")
+	_expect(monster._presentation.current_animation == &"pounce", "Pounce windup is communicated by its authored silhouette")
 	_expect(monster._presentation.pounce_telegraph_visible() and not monster._presentation.charge_telegraph_visible(), "Pounce windup shows a compact landing marker instead of a charge lane")
 	var pounce_start := monster.position
 	await _until_phase(FieldMonster.PHASE_ACTIVE)

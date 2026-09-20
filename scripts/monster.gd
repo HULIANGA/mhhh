@@ -123,7 +123,6 @@ func receive_hit(attack_token: int, damage: int, hit_position: Vector3) -> bool:
 	var applied_damage := mini(damage, health)
 	health = maxi(health - damage, 0)
 	_flash_time = 0.18
-	_update_label()
 	health_changed.emit(health, max_health)
 	hit_received.emit(applied_damage, hit_position)
 	if health <= 0:
@@ -150,7 +149,6 @@ func reset_monster() -> void:
 	_charge_crashed = false
 	_presentation.reset_pose()
 	_set_state(STATE_IDLE, true)
-	_update_label()
 	health_changed.emit(health, max_health)
 
 func set_target(target: Hunter) -> void:
@@ -169,7 +167,6 @@ func set_ai_enabled(enabled: bool) -> void:
 	_presentation.hide_attack_telegraphs()
 	_presentation.reset_pose()
 	_set_state(STATE_IDLE)
-	_update_label()
 
 func _die() -> void:
 	if is_dead:
@@ -181,7 +178,6 @@ func _die() -> void:
 	_set_state(STATE_DEAD)
 	_presentation.play_defeated()
 	_presentation.hide_attack_telegraphs()
-	_update_label()
 	defeated.emit()
 
 func _start_attack(data: MonsterAttackData) -> void:
@@ -259,7 +255,6 @@ func _finish_attack() -> void:
 	if not is_dead:
 		_presentation.reset_pose()
 	_set_state(STATE_READY)
-	_update_label()
 
 func _select_attack(distance: float) -> MonsterAttackData:
 	var candidates := _attack_candidates(distance)
@@ -320,7 +315,12 @@ func _set_attack_phase(next_phase: StringName, force_emit: bool = false) -> void
 	if attack_phase != PHASE_WINDUP:
 		_presentation.hide_attack_telegraphs()
 	attack_phase_changed.emit(_attack_data.display_name, attack_phase)
-	_update_label()
+
+func debug_attack_id() -> StringName:
+	return _attack_data.attack_id if _attack_data else &"none"
+
+func debug_animation_name() -> StringName:
+	return _presentation.current_animation if _presentation else &"none"
 
 func _resolve_sweep_hit() -> void:
 	if _attack_resolved:
@@ -458,6 +458,3 @@ func _show_attack_telegraph() -> void:
 func _animate_walk(delta: float) -> void:
 	var speed := Vector2(velocity.x, velocity.z).length()
 	_presentation.animate_walk(delta, speed, move_speed, is_dead)
-
-func _update_label() -> void:
-	_presentation.update_status(health, max_health, state, _attack_data, attack_phase)

@@ -60,7 +60,7 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	if get_tree().paused:
 		return
-	hud.debug_label.text = "%d FPS  /  %.1f m\nX %+.2f    Z %+.2f\n%s  /  %s\nF1  hide diagnostics" % [Engine.get_frames_per_second(), player.travel_distance, player.position.x, player.position.z, player.action_state, player.action_phase]
+	hud.debug_label.text = "%d FPS  /  %.1f m\nX %+.2f    Z %+.2f\nHUNTER  %s / %s\nBEAST  %s / %s / %s\nANIM  %s\nF1  hide diagnostics" % [Engine.get_frames_per_second(), player.travel_distance, player.position.x, player.position.z, player.action_state, player.action_phase, monster.state, monster.debug_attack_id(), monster.attack_phase, monster.debug_animation_name()]
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
@@ -93,6 +93,7 @@ func resume() -> void:
 	started = true
 	battle_state = BATTLE_RUNNING
 	hud.hide_menu()
+	hud.set_monster_health_visible(true)
 	get_tree().paused = false
 
 func reset_exercise() -> void:

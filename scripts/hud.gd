@@ -16,7 +16,9 @@ var start_button: Button
 var reset_button: Button
 var monster_ai_button: Button
 var objective: Label
-var target_health: Label
+var monster_health_panel: PanelContainer
+var monster_health_bar: ProgressBar
+var monster_health_value: Label
 var action_label: Label
 var player_health_bar: ProgressBar
 var player_health_value: Label
@@ -55,6 +57,7 @@ func _ready() -> void:
 	monster_ai_button.offset_top = 78
 	monster_ai_button.offset_right = -30
 	monster_ai_button.offset_bottom = 120
+	_build_monster_health()
 	var bottom := PanelContainer.new()
 	bottom.add_theme_stylebox_override("panel", _panel(Color(0.045, 0.09, 0.1, 0.92)))
 	_root.add_child(bottom)
@@ -66,7 +69,6 @@ func _ready() -> void:
 	var content := VBoxContainer.new()
 	content.add_theme_constant_override("separation", 7)
 	bottom.add_child(content)
-	target_health = _label(content, "FIELD BEAST    /    180 HP", 12, ACCENT)
 	objective = _label(content, "Read the warning. Evade sweep, pounce, or charge.", 19, INK)
 	action_label = _label(content, "READY    /    AIM, THEN CHOOSE AN ACTION", 12, MUTED)
 	var health_row := HBoxContainer.new()
@@ -117,6 +119,37 @@ func _ready() -> void:
 	debug_label.visible = false
 	_build_overlay()
 
+func _build_monster_health() -> void:
+	monster_health_panel = PanelContainer.new()
+	monster_health_panel.name = "MonsterHealth"
+	monster_health_panel.add_theme_stylebox_override("panel", _panel(Color(0.045, 0.09, 0.1, 0.94), Color(0.42, 0.52, 0.45, 0.75)))
+	_root.add_child(monster_health_panel)
+	monster_health_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
+	monster_health_panel.offset_left = -230
+	monster_health_panel.offset_top = 22
+	monster_health_panel.offset_right = 230
+	monster_health_panel.offset_bottom = 98
+	monster_health_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 5)
+	monster_health_panel.add_child(content)
+	var heading := HBoxContainer.new()
+	content.add_child(heading)
+	var name_label := _label(heading, "FIELD BEAST", 14, ACCENT)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	monster_health_value = _label(heading, "180 / 180", 13, INK)
+	monster_health_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	monster_health_bar = ProgressBar.new()
+	monster_health_bar.custom_minimum_size = Vector2(0, 16)
+	monster_health_bar.show_percentage = false
+	monster_health_bar.max_value = 180
+	monster_health_bar.value = 180
+	monster_health_bar.add_theme_stylebox_override("background", _panel(Color("251d1b")))
+	monster_health_bar.add_theme_stylebox_override("fill", _panel(Color("c98665")))
+	monster_health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(monster_health_bar)
+	monster_health_panel.hide()
+
 func _process(delta: float) -> void:
 	if _feedback_time <= 0.0:
 		return
@@ -162,6 +195,9 @@ func hide_menu() -> void:
 	start_button.show()
 	start_button.release_focus()
 
+func set_monster_health_visible(visible: bool) -> void:
+	monster_health_panel.visible = visible
+
 func show_battle_result(won: bool) -> void:
 	overlay.show()
 	start_button.hide()
@@ -196,7 +232,9 @@ func set_player_health(current: int, maximum: int) -> void:
 	player_health_value.text = "HP  %d / %d" % [current, maximum]
 
 func set_target_health(current: int, maximum: int) -> void:
-	target_health.text = "FIELD BEAST    /    %d OF %d HP" % [current, maximum]
+	monster_health_bar.max_value = maximum
+	monster_health_bar.value = current
+	monster_health_value.text = "%d / %d" % [current, maximum]
 	objective.text = "Beast down. Press R to reset the pursuit." if current <= 0 else "Read the warning. Evade sweep, pounce, or charge."
 
 func set_action(action: String, phase: String) -> void:

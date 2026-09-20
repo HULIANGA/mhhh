@@ -205,6 +205,7 @@ def main():
         run("--script", "res://tests/hunter_asset_test.gd")
         run("--script", "res://tests/monster_asset_test.gd")
         run("--script", "res://tests/presentation_test.gd")
+        run("--script", "res://tests/hud_test.gd")
         run("--script", "res://tests/input_test.gd")
         run("--script", "res://tests/movement_test.gd")
         run("--script", "res://tests/combat_test.gd")
