@@ -60,7 +60,7 @@ def export_art_assets():
     ).stdout
     if not re.search(rf"(?m)^Blender {re.escape(BLENDER_VERSION)}(?:\s|$)", version):
         raise SystemExit(f"M4 assets require Blender {BLENDER_VERSION}; selected executable reported:\n{version}")
-    scripts = ("build_contract_asset.py", "build_greatsword.py", "build_hunter.py")
+    scripts = ("build_contract_asset.py", "build_greatsword.py", "build_hunter.py", "build_monster.py")
     for script in scripts:
         command = [
             executable, "--background", "--factory-startup",
@@ -186,6 +186,7 @@ def main():
         run("--script", "res://tests/art_asset_test.gd")
         run("--script", "res://tests/greatsword_test.gd")
         run("--script", "res://tests/hunter_asset_test.gd")
+        run("--script", "res://tests/monster_asset_test.gd")
         return
     if args.command == "art-check":
         validate_art_assets()
@@ -193,6 +194,7 @@ def main():
         run("--script", "res://tests/art_asset_test.gd")
         run("--script", "res://tests/greatsword_test.gd")
         run("--script", "res://tests/hunter_asset_test.gd")
+        run("--script", "res://tests/monster_asset_test.gd")
         return
     if args.command not in serve_commands:
         import_project()
@@ -201,6 +203,7 @@ def main():
         run("--script", "res://tests/art_asset_test.gd")
         run("--script", "res://tests/greatsword_test.gd")
         run("--script", "res://tests/hunter_asset_test.gd")
+        run("--script", "res://tests/monster_asset_test.gd")
         run("--script", "res://tests/presentation_test.gd")
         run("--script", "res://tests/input_test.gd")
         run("--script", "res://tests/movement_test.gd")

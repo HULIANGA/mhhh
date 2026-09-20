@@ -11,6 +11,8 @@ GREATSWORD_GLB_PATH = ROOT / "assets/models/greatsword.glb"
 GREATSWORD_BLEND_PATH = ROOT / "art/blender/greatsword.blend"
 HUNTER_GLB_PATH = ROOT / "assets/models/hunter.glb"
 HUNTER_BLEND_PATH = ROOT / "art/blender/hunter.blend"
+MONSTER_GLB_PATH = ROOT / "assets/models/monster.glb"
+MONSTER_BLEND_PATH = ROOT / "art/blender/monster.blend"
 REQUIRED_NODES = {
     "ContractRig",
     "ContractMesh",
@@ -63,6 +65,16 @@ HUNTER_REQUIRED_ANIMATIONS = {
     "dodge",
     "hit",
     "defeated",
+}
+MONSTER_REQUIRED_NODES = {
+    "FieldBeastRig", "Root", "Pelvis", "Spine", "Shoulders", "Neck", "Head",
+    "HornLBase", "HornLTip", "HornRBase", "HornRTip",
+    "UpperForeleg.L", "LowerForeleg.L", "UpperForeleg.R", "LowerForeleg.R",
+    "UpperHindleg.L", "LowerHindleg.L", "UpperHindleg.R", "LowerHindleg.R",
+}
+MONSTER_REQUIRED_ANIMATIONS = {
+    "idle_loop", "run_loop", "sweep", "pounce", "charge_windup", "charge_run",
+    "charge_recovery", "crash_stunned", "hit", "defeated",
 }
 
 
@@ -181,6 +193,44 @@ def main() -> None:
         "HUNTER ASSET CHECK: PASS "
         f"({len(hunter.get('meshes', []))} meshes, {hunter_triangle_count} triangles, "
         f"{hunter_material_count} materials, {len(hunter_animations)} animations)"
+    )
+
+    if not MONSTER_BLEND_PATH.is_file():
+        fail(f"missing Blender source: {MONSTER_BLEND_PATH.relative_to(ROOT)}")
+    if not MONSTER_GLB_PATH.is_file():
+        fail(f"missing runtime GLB: {MONSTER_GLB_PATH.relative_to(ROOT)}")
+    try:
+        monster = glb_json(MONSTER_GLB_PATH)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        fail(f"monster: {error}")
+    monster_names = {node.get("name") for node in monster.get("nodes", [])}
+    missing_monster_nodes = sorted(MONSTER_REQUIRED_NODES - monster_names)
+    if missing_monster_nodes:
+        fail(f"monster missing nodes/bones: {', '.join(missing_monster_nodes)}")
+    monster_animations = {animation.get("name") for animation in monster.get("animations", [])}
+    missing_monster_animations = sorted(MONSTER_REQUIRED_ANIMATIONS - monster_animations)
+    if missing_monster_animations:
+        fail(f"monster missing animations: {', '.join(missing_monster_animations)}")
+    if not monster.get("skins"):
+        fail("monster contains no skin/skeleton")
+    monster_material_count = len(monster.get("materials", []))
+    if monster_material_count <= 0 or monster_material_count > 4:
+        fail(f"monster material budget invalid: {monster_material_count}")
+    monster_triangle_count = 0
+    monster_accessors = monster.get("accessors", [])
+    for mesh in monster.get("meshes", []):
+        for primitive in mesh.get("primitives", []):
+            if primitive.get("mode", 4) != 4:
+                continue
+            accessor_index = primitive.get("indices")
+            if accessor_index is not None:
+                monster_triangle_count += monster_accessors[accessor_index]["count"] // 3
+    if monster_triangle_count <= 0 or monster_triangle_count > 15000:
+        fail(f"monster triangle budget invalid: {monster_triangle_count}")
+    print(
+        "MONSTER ASSET CHECK: PASS "
+        f"({len(monster.get('meshes', []))} meshes, {monster_triangle_count} triangles, "
+        f"{monster_material_count} materials, {len(monster_animations)} animations)"
     )
 
 
